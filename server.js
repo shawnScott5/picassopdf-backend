@@ -18,12 +18,28 @@ import fileupload from 'express-fileupload';
 import EventsRoute from './events/EventsRoutes.js';
 
 const app = express();
+const allowedOrigins = ['https://app.distros.io'];
+
+// Enable proxy to correctly handle HTTPS redirection in Heroku
+app.enable('trust proxy');
+
+// Middleware to force HTTPS in production (for Heroku)
+app.use((req, res, next) => {
+    if (req.secure) {
+        return next();  // Continue if the request is already HTTPS
+    } else {
+        res.redirect('https://' + req.headers.host + req.url);  // Redirect to HTTPS
+    }
+});
 
 // Middleware
 app.use(express.json({ limit: '1gb' }));
 app.use(express.urlencoded({ limit: '1gb', extended: true }));
 app.use(fileupload({useTempFiles: true}))
-app.use(cors());
+app.use(cors({
+    origin: allowedOrigins,
+    credentials: true  // Allows sending cookies or authentication headers if needed
+}));
 app.use(bodyParser.json());
 app.use('/api/actions', ActionsRoute);
 app.use('/api/admin', AdminRoute);
