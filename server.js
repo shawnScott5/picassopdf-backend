@@ -19,6 +19,7 @@ import EventsRoute from './events/EventsRoutes.js';
 
 const app = express();
 const allowedOrigins = ['https://app.distros.io'];
+const PORT = process.env.PORT || 3000;
 
 // Enable proxy to correctly handle HTTPS redirection in Heroku
 app.enable('trust proxy');
@@ -55,6 +56,4 @@ app.use('/api/uploads', UploadsRoute);
 db();
 
 // Start the server
-app.listen(config.port, () => {
-    console.log(`Server listening on port ${config.port}`);
-});
+app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
