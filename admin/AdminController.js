@@ -25,19 +25,6 @@ const openai = new OpenAI({
     apiKey: openAiApiKey, // Replace with your OpenAI API key
 });
 
-const CONFIG = {
-    credentials: {
-      private_key: CREDENTIALS.private_key,
-      client_email: CREDENTIALS.client_email
-    }
-};
-const client = new vision.ImageAnnotatorClient(CONFIG);
-
-
-const detectPersonInURL = async(imageUrl) => {
-    const [result] = await client.labelDetection(imageUrl);
-    return result.labelAnnotations.map(label => label.description.toLowerCase());
-}
 
 // Function to fetch emails by domain
 const getEmailsByDomain = async(firstName, domain) => {
