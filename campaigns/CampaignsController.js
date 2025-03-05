@@ -18,8 +18,7 @@ const myCampaigns = async(req, res, next) => {
             //query.$and.push({ status: filter.status }); UNCOMMENT LATER
         }
         console.log(query)
-        const campaigns = 
-            await CampaignSchema.find(query)
+        const campaigns = await CampaignSchema.find(query)
             //.sort(sorting)
             .skip((filter && filter.page) ? parseInt(filter.limit) * (parseInt(filter.page) - 1) : 0)
             .limit(parseInt(filter.limit));

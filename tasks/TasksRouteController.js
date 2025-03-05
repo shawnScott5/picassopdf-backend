@@ -23,6 +23,7 @@ const createNewTask = async(req, res, next) => {
     if(taskCreated) {
         return res.status(200).json({
             status: true,
+            data: taskCreated,
             message: 'Task was created successfully!'
         });
     }
@@ -76,10 +77,13 @@ const deleteTask = async(req, res, next) => {
      return res.status(500).json({error: 'Something went wrong'});
 }
 
-const getMyTasks = async(req, res, next) => {
-    const form = req.query;
+const getMyTasks = async(req, res) => {
+    const filter = req.query;
     try {
-        const tasks = await TasksSchema.find({userId: form.userId}).sort({createdDate: -1});
+        const tasks = await TasksSchema.find({userId: filter.userId})
+            .sort({createdDate: -1})
+            .skip((filter && filter.page) ? parseInt(filter.limit) * (parseInt(filter.page) - 1) : 0)
+            .limit(parseInt(filter.limit));
 
         return res.status(200).json({
             status: true,

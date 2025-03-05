@@ -138,6 +138,10 @@ const InfluencersSchema = new mongoose.Schema({
         type: String,
         require: true
     },
+    engagement: {
+        type: Number,
+        require: true
+    },
     isHidden: {
         type: Boolean,
         default: false

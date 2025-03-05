@@ -3,7 +3,6 @@ import EventsSchema from './EventsSchema.js';
 
 const myEvents = async(req, res, next) => {
     const form = req.query;
-    console.log(form)
     try {
         const events = await EventsSchema.find({userId: form.userId});
     
@@ -16,8 +15,50 @@ const myEvents = async(req, res, next) => {
     }
 }
 
+const completeEvent = async(req, res) => {
+    try {
+        const form = req.body;
+
+        const updatedEvent = await EventsSchema.findOneAndUpdate({ userId: form.userId, _id: form._id },
+            { $set: {isComplete: true }},
+            { new: true }
+        )
+    
+        if (updatedEvent) {
+            return res.status(200).json({
+                status: true,
+                message: 'Event was successfully Completed!',
+                data: updatedEvent
+            });
+        }
+    } catch(error) {
+        return res.status(500).json({error: 'Something went wrong'});
+    }
+}
+
+const incompleteEvent = async(req, res) => {
+    try {
+        const form = req.body;
+
+        const updatedEvent = await EventsSchema.findOneAndUpdate({ userId: form.userId, _id: form._id },
+            { $set: {isComplete: false}},
+            { new: true }
+        )
+    
+        if (updatedEvent) {
+            return res.status(200).json({
+                status: true,
+                message: 'Event was successfully Completed!',
+                data: updatedEvent
+            });
+        }
+    } catch(error) {
+        return res.status(500).json({error: 'Something went wrong'});
+    }
+}
+
 const updateEvent = async(req, res, next) => {
-     const form = req.body;
+    const form = req.body;
 
     const updatedEvent = await EventsSchema.findOneAndUpdate({ userId: form.userId, _id: form._id },
         { $set: form },
@@ -34,12 +75,12 @@ const updateEvent = async(req, res, next) => {
     return res.status(500).json({error: 'Something went wrong'});
 }
 
-const deleteEvent = async(req, res, next) => {
+const deleteEvent = async(req, res) => {
      const form = req.query;
-        console.log(req.query)
+     try {
         const eventToDelete = {
             userId: form.userId,
-            _id: form.eventId
+            _id: form._id
         }
         const eventDeleted = await EventsSchema.findOneAndDelete(eventToDelete);
         
@@ -49,13 +90,14 @@ const deleteEvent = async(req, res, next) => {
                 message: 'Event was deleted successfully!'
             });
         }
+     } catch(error) {
         return res.status(500).json({error: 'Something went wrong'});
+     }
       
 }
 
 const createEvent = async(req, res, next) => {
-    const form = req.body;
-    console.log(form)
+        const form = req.body;
         const newEvent = {
             createdDate: new Date().toLocaleString(),
             userId: form.userId,
@@ -77,4 +119,4 @@ const createEvent = async(req, res, next) => {
         return res.status(500).json({error: 'Something went wrong'});
 }
 
-export { myEvents, updateEvent, deleteEvent, createEvent };
+export { myEvents, updateEvent, deleteEvent, createEvent, completeEvent, incompleteEvent };

@@ -69,9 +69,12 @@ const deleteList = async(req, res, next) => {
 }
 
 const getMyLists = async(req, res, next) => {
-    const form = req.query;
+    const filter = req.query;
     try {
-        const lists = await ListsSchema.find({userId: form.userId});
+        const lists = await ListsSchema.find({userId: filter.userId})
+        .sort({createdDate: -1})
+        .skip((filter && filter.page) ? parseInt(filter.limit) * (parseInt(filter.page) - 1) : 0)
+        .limit(parseInt(filter.limit));
 
         return res.status(200).json({
             status: true,
