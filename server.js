@@ -19,6 +19,8 @@ import EventsRoute from './events/EventsRoutes.js';
 import SubscribeRoute from './subscribe/SubscribeRoute.js';
 import path from 'path';
 import url from 'url';
+import SubscribeStripeScaleRoute from './subscribe-stripe-scale/SubscribeStripeScaleRoute.js';
+import SubscribeStripeRoute from './subscribe-stripe/SubscribeStripeRoute.js';
 
 const app = express();
 const allowedOrigins = ['https://app.distros.io'];
@@ -59,6 +61,8 @@ app.use('/api/tasks', TasksRoute);
 app.use('/api/notes', NotesRoute);
 app.use('/api/uploads', UploadsRoute);
 app.use('/api/subscribe', SubscribeRoute);
+app.use('/api/subscribe-stripe-pro', SubscribeStripeRoute);
+app.use('/api/subscribe-stripe-scale', SubscribeStripeScaleRoute);
 
 // Serve static files from Angular's `dist` folder
 app.use(express.static(path.join(__dirname, '..', 'dist', 'distros-frontend')));
