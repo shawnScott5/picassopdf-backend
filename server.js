@@ -1,6 +1,6 @@
 import express from 'express';
 import UserRoute from './users/UserRoute.js';
-import InfluencersRoute from './influencers/InfluencersRoute.js'
+import InfluencersRoute from './influencers/InfluencersRoute.js';
 import ListsRoute from './lists/ListsRoute.js';
 import TasksRoute from './tasks/TasksRoute.js';
 import AdminRoute from './admin/AdminRoute.js';
@@ -16,6 +16,8 @@ import NotesRoute from './notes/NotesRoute.js';
 import helmet from 'helmet';
 import fileupload from 'express-fileupload';
 import EventsRoute from './events/EventsRoutes.js';
+import SubscribeRoute from './subscribe/SubscribeRoute.js';
+import path from 'path';
 
 const app = express();
 const allowedOrigins = ['https://app.distros.io'];
@@ -52,7 +54,17 @@ app.use('/api/events', EventsRoute);
 app.use('/api/tasks', TasksRoute);
 app.use('/api/notes', NotesRoute);
 app.use('/api/uploads', UploadsRoute);
+app.use('/api/subscribe', SubscribeRoute);
 
+// Serve static files from Angular's `dist` folder
+app.use(express.static(path.join(__dirname, 'dist/distros-frontend')));
+
+// Handle all other routes by redirecting to `index.html`
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist/distros-frontend/index.html'));
+});
+
+// Connect to the database
 db();
 
 // Start the server

@@ -5,23 +5,25 @@ import CampaignSchema from './CampaignsSchema.js';
 
 const myCampaigns = async(req, res, next) => {
     try {
-        const sorting = { 'firstName': -1 };
+        const sorting = { 'startDate': -1 };
         const filter = req.query;
         const query = { $and: [] }; // Initialize $and operator as an array
         query.$and.push({ userId: filter.userId });
+        console.log(filter)
     
         if(filter.paymentType) {
             query.$and.push({ compensationDuration: filter.paymentType });
         }
 
         if(filter.status) {
-            //query.$and.push({ status: filter.status }); UNCOMMENT LATER
+            query.$and.push({ status: filter.status });
         }
         console.log(query)
         const campaigns = await CampaignSchema.find(query)
-            //.sort(sorting)
+            .sort(sorting)
             .skip((filter && filter.page) ? parseInt(filter.limit) * (parseInt(filter.page) - 1) : 0)
             .limit(parseInt(filter.limit));
+        console.log(campaigns.length)
     
         return res.status(200).json({
             status: true,
@@ -72,17 +74,19 @@ const deleteCampaign = async(req, res, next) => {
 const createCampaign = async(req, res, next) => {
     const form = req.body;
     const client = await InfluencersSchema.findOne({name: form.clientName.trim()});
+    const nonClientProfilePic = '';
         const newCampaign = {
             createdDate: new Date().toLocaleString(),
             userId: form.userId,
             clientName: form.clientName.trim(),
-            profilePic: client.profilePic,
+            profilePic: client ? client.profilePic : '',
             compensation: form.compensation,
             compensationDuration: form.duration,
             startDate: form.startDate,
             isEndDate: form.isEndDate,
             endDate: form.endDate,
             details: form.details,
+            status: form.status
         }
         const campaignCreated = await CampaignSchema.create(newCampaign);
 

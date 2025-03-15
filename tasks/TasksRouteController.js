@@ -79,6 +79,7 @@ const deleteTask = async(req, res, next) => {
 
 const getMyTasks = async(req, res) => {
     const filter = req.query;
+    console.log(filter)
     try {
         const tasks = await TasksSchema.find({userId: filter.userId})
             .sort({createdDate: -1})
