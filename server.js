@@ -64,7 +64,7 @@ app.use('/api/subscribe', SubscribeRoute);
 app.use(express.static(path.join(__dirname, '..', 'dist', 'distros-frontend')));
 
 // Handle all other routes by redirecting to `index.html`
-app.get('*', (req, res) => {
+app.get('/*', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'dist', 'distros-frontend', 'index.html'));
 });
 
