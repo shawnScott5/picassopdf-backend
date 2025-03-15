@@ -57,11 +57,11 @@ app.use('/api/uploads', UploadsRoute);
 app.use('/api/subscribe', SubscribeRoute);
 
 // Serve static files from Angular's `dist` folder
-app.use(express.static(path.join(__dirname, 'dist/distros-frontend')));
+app.use(express.static(path.join(__dirname, '..', 'dist', 'distros-frontend')));
 
 // Handle all other routes by redirecting to `index.html`
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist/distros-frontend/index.html'));
+    res.sendFile(path.join(__dirname, '..', 'dist', 'distros-frontend', 'index.html'));
 });
 
 // Connect to the database
