@@ -18,10 +18,14 @@ import fileupload from 'express-fileupload';
 import EventsRoute from './events/EventsRoutes.js';
 import SubscribeRoute from './subscribe/SubscribeRoute.js';
 import path from 'path';
+import url from 'url';
 
 const app = express();
 const allowedOrigins = ['https://app.distros.io'];
 const PORT = process.env.PORT || 3000;
+
+// Get the directory name of the current module
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 // Enable proxy to correctly handle HTTPS redirection in Heroku
 app.enable('trust proxy');
