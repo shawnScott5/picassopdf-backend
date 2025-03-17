@@ -6,6 +6,11 @@ import nodemailer from 'nodemailer';
 import cloudinary from 'cloudinary';
 import UserTokenSchema from '../users/UserTokenSchema.js';
 import debounce from 'lodash.debounce';
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2024-04-10'
+});
 
 //https://www.instagram.com/shawnscottjr/?__a=1 (link to scrape IG profiles)
 //Ex: https://api.hunter.io/v2/email-finder?domain=reddit.com&first_name=Alexis&last_name=Ohanian&api_key=e7f1950c4322e75a93bd93deb32aa4647929c13d
@@ -38,15 +43,15 @@ const register = async(req, res, next) => {
         const thisMonthName = monthNames[today.getMonth()];
         const lastMonthName = (today.getMonth() + 1) == 1 ? monthNames[11] : monthNames[today.getMonth() -1];
         const hashedPassword = await bcrypt.hash(password, 10);
-        const now = new Date(); // Get current local time
-        now.setMonth(now.getMonth() + 1); // Add 1 month
+        const nextPaymentDate = new Date(); // Get current local time
+        nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1); // Add 1 month
         const newUser  = await UserSchema.create({
             name,
             email,
             password: hashedPassword,
             subscription: subscription,
             subscriptionStartDate: new Date().toLocaleString(),
-            nextPaymentDate: now.toLocaleString(),
+            nextPaymentDate: nextPaymentDate.toLocaleString(),
             thisMonthName: thisMonthName,
             lastMonthName: lastMonthName,
             referralCode: referralCode,
@@ -62,7 +67,6 @@ const register = async(req, res, next) => {
             }
         });
     } catch (error) {
-        console.log(error)
         return res.status(500).json({error: 'Something went wrong'});
     }
 }
@@ -74,7 +78,6 @@ const login = async(req, res, next) => {
         return res.status(400).json({error: 'All fields are required'});
     }
 
-    console.log(req)
     const user = await UserSchema.findOne({email: email});
     if(!user) {
         return res.status(400).json({error: 'User not found'});
@@ -110,23 +113,76 @@ const me = async(req, res, next) => {
     const user = await UserSchema.findById({_id: request.userId});
     
     if(user) {
+        // This block only triggers after a user backs out of stripe subscription page (this is a bug workout)
+        if(user.subscription.type != 'FREE' && !user.stripeSubscriptionId) {
+            if(user.stripeSessionId) {
+                const session = await stripe.checkout.sessions.retrieve(user.stripeSessionId);
+        
+                // Extract subscription ID from the session
+                const subscriptionId = session.subscription;
+        
+                if (!subscriptionId) {
+                  await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': 'FREE', stripeSessionId: '', stripeSubscriptionId: '' }}, { new: true });
+                } else {
+                    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+                    if(subscription) {
+                        await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { stripeSubscriptionId: subscriptionId }}, { new: true });
+                    }
+                }
+            } else {
+                await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': 'FREE', stripeSessionId: '', stripeSubscriptionId: '' }}, { new: true });
+            }
+        }
+
+        //Reset monthly membership data (if applicable)
+        const today = new Date().toLocaleString();
+        const todaysDate = new Date(today);
+        const nextPaymentDate = new Date(user.nextPaymentDate);
+      
+        if(todaysDate.getTime() == nextPaymentDate.getTime() || todaysDate.getTime() > nextPaymentDate.getTime()) {
+            nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+            while(todaysDate.getTime() == nextPaymentDate.getTime() || todaysDate.getTime() > nextPaymentDate.getTime()) {
+                nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+            }
+            
+            if(user.subscription.type != 'FREE') {
+                const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+                if(!subscription || subscription?.status != 'active') {
+                    await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { stripeSubscriptionId: '', stripeSessionId: '', 'subscription.type': 'FREE' }}, { new: true });
+                }
+            }
+
+            await UserSchema.findOneAndUpdate({ _id: user._id }, { 
+                $set: { 
+                    nextPaymentDate: nextPaymentDate.toLocaleString(),
+                    influencersEmailViewed: [],
+                    influencersEmailViewedCount: 0,
+                    tempViewLimit: null
+                }}, { new: true });
+        }
+
+        //fetch final user object
+        const finalUser = await UserSchema.findById({_id: request.userId});
         return res.status(200).json({
             status: true,
             data: {
-                _id: user._id,
-                email: user.email,
-                name: user.name,
-                recurringRevenue: user.recurringRevenue,
-                thisMonthRevenue: user.thisMonthRevenue,
-                totalClients: user.totalClients,
-                newClients: user.newClients,
-                subscription: user.subscription,
-                subscriptionStartDate: user.subscriptionStartDate,
-                influencersEmailViewed: user.influencersEmailViewed,
-                influencersEmailViewedCount: user.influencersEmailViewedCount,
-                nextPaymentDate: user.nextPaymentDate,
-                admin: user.admin,
-                avatar: user.avatar
+                _id: finalUser._id,
+                email: finalUser.email,
+                name: finalUser.name,
+                recurringRevenue: finalUser.recurringRevenue,
+                thisMonthRevenue: finalUser.thisMonthRevenue,
+                totalClients: finalUser.totalClients,
+                newClients: finalUser.newClients,
+                subscription: finalUser.subscription,
+                subscriptionStartDate: finalUser.subscriptionStartDate,
+                influencersEmailViewed: finalUser.influencersEmailViewed,
+                influencersEmailViewedCount: finalUser.influencersEmailViewedCount,
+                nextPaymentDate: finalUser.nextPaymentDate,
+                admin: finalUser.admin,
+                avatar: finalUser.avatar,
+                stripeSessionId: finalUser.stripeSessionId,
+                stripeSubscriptionId: finalUser.stripeSubscriptionId,
+                tempViewLimit: finalUser.tempViewLimit
             }
         });
     }
@@ -251,7 +307,6 @@ const updateViewCount = async (req, res) => {
             });
         }
     } catch (error) {
-        console.log(error)
         return res.status(500).json({error: 'Something went wrong'});
     }
 }
@@ -272,7 +327,8 @@ const resetViewCount = async(req, res, next) => {
                 { 
                     $set: { influencersEmailViewed: [] },
                     $set: { influencersEmailViewedCount: 0 }, // Increment by 1
-                    $set: { nextPaymentDate: newNextPaymentDate }
+                    $set: { nextPaymentDate: newNextPaymentDate },
+                    $set: { tempViewLimit: null }
                 }, 
                 { new: true }
            );

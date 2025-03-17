@@ -70,6 +70,15 @@ const UserSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    stripeSessionId: {
+        type: String
+    },
+    stripeSubscriptionId: {
+        type: String
+    },
+    tempViewLimit: {
+        type: Number
+    }
 
 }, {timeStamps: true});
 
