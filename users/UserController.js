@@ -26,10 +26,16 @@ const { sign } = jwt;
 const requestIds = new Set(); // Track processed request IDs
 
 const register = async(req, res, next) => {
-    const { name, email, password, subscription, referralCode } = req.body;
+    const { name, email, password, subscription, referralCode, fingerprint } = req.body;
 
     if(!name || !email || !password) {
         return res.status(400).json({error: 'All fields are required'});
+    }
+
+    // Check if the fingerprint (device) already exists
+    const existingDevice = await UserSchema.findOne({ fingerprint: fingerprint });
+    if (existingDevice) {
+        return res.status(403).json({ error: 'Multiple accounts from the same device are not allowed' });
     }
 
     const user = await UserSchema.findOne({email: email});
@@ -56,7 +62,8 @@ const register = async(req, res, next) => {
             lastMonthName: lastMonthName,
             referralCode: referralCode,
             influencersEmailViewedCount: 0,
-            influencersEmailViewed: []
+            influencersEmailViewed: [],
+            fingerprint: fingerprint
         });
         return res.status(201).json({
             status: true,

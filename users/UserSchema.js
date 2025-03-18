@@ -78,6 +78,9 @@ const UserSchema = new mongoose.Schema({
     },
     tempViewLimit: {
         type: Number
+    },
+    fingerprint: {
+        type: String
     }
 
 }, {timeStamps: true});
