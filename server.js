@@ -47,6 +47,8 @@ app.use(express.urlencoded({ limit: '1gb', extended: true }));
 app.use(fileupload({useTempFiles: true}))
 app.use(cors({
     origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true  // Allows sending cookies or authentication headers if needed
 }));
 app.use(bodyParser.json());
