@@ -236,7 +236,7 @@ const forgotPassword = async(req, res, next) => {
             <h1 style="color: black;">Password Reset Request</h1>
             <p style="color: black;">${user.name},</p>
             <p style="color: black;">We received a request to reset your password for your Distros account. To complete the password reset process, please click the reset button below:</p>
-            <a href=${process.env.LIVE_URL}/reset-password/${token}><button style="background-color: #12e19f; color: white; padding: 14px 20px; border: 1px solid #12e19f; cursor: pointer; border-radius: 4px">Reset Password</button></a>
+            <a href=${process.env.LIVE_URL}/reset-password#${token}><button style="background-color: #12e19f; color: white; padding: 14px 20px; border: 1px solid #12e19f; cursor: pointer; border-radius: 4px">Reset Password</button></a>
             <p style="color: black;">Please note that this link is only valid for 5mins. If you did not request a password reset, please disregard this message.</p>
             <p style="color: black;">Thank you,</p>
             <p style="color: black;">Distros Team</P>
