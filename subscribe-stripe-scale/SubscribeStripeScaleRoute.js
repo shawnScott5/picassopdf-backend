@@ -23,7 +23,7 @@ SubscribeStripeScaleRoute.post('/', async(req, res) => {
         });
         if(session.id) {
           const nextPaymentDate = new Date(); // Get current local time
-          nextPaymentDate.setMonth(now.getMonth() + 1); // Add 1 month
+          nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1); // Add 1 month
                   
           await UserSchema.findOneAndUpdate({ _id: userId }, 
             { $set: 
