@@ -3,7 +3,6 @@ import TasksSchema from './TasksSchema.js';
 
 const createNewTask = async(req, res, next) => {
     const form = req.body;
-    console.log(form)
     const newTask = {
         createdDate: new Date().toLocaleString(),
         userId: form.userId,
@@ -17,7 +16,6 @@ const createNewTask = async(req, res, next) => {
         flagged: form.flagged,
         status: form.status
     }
-    console.log(newTask)
     const taskCreated = await TasksSchema.create(newTask);
     
     if(taskCreated) {
@@ -31,11 +29,9 @@ const createNewTask = async(req, res, next) => {
 }
 
 const updateTask = async(req, res, next) => {
-    console.log('updating task!!!!')
     const form = req.body;
     
     let updatedTask = await TasksSchema.findOneAndUpdate({ userId: form.userId, _id: form._id }, { $set: form }, { new: true });
-    console.log(updatedTask)
     if (updatedTask) {
         return res.status(200).json({
             status: true,
@@ -49,7 +45,6 @@ const editTask = async(req, res, next) => {
     const form = req.body;
     
     let updatedTask = await TasksSchema.findOneAndUpdate({ userId: form.userId, name: form.task.name }, { $set: { status: form.task.status }}, { new: true });
-    console.log(updatedTask)
 
     if (updatedTask) {
         return res.status(200).json({
@@ -79,9 +74,27 @@ const deleteTask = async(req, res, next) => {
 
 const getMyTasks = async(req, res) => {
     const filter = req.query;
-    console.log(filter)
+    const query = { $and: [{userId: filter.userId}] }; // Initialize $and operator as an array
+
     try {
-        const tasks = await TasksSchema.find({userId: filter.userId})
+
+        if(filter.reminder) {
+            query.$and.push({ reminder: filter.reminder });
+        }
+
+        if(filter.priority) {
+            query.$and.push({ priority: filter.priority });
+        }
+
+        if(filter.status) {
+            query.$and.push({ status: filter.status });
+        }
+
+        if(filter.flagged) {
+            query.$and.push({ flagged: filter.flagged });
+        }
+
+        const tasks = await TasksSchema.find(query)
             .sort({createdDate: -1})
             .skip((filter && filter.page) ? parseInt(filter.limit) * (parseInt(filter.page) - 1) : 0)
             .limit(parseInt(filter.limit));

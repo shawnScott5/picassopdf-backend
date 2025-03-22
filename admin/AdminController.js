@@ -219,11 +219,25 @@ const getUsername = async(url) => {
 
 const testImportFile = async(req, res, next) => {
     const csv = req.body;
+    let category = csv.data.category;
+    if(category == 'Update DB') {
+
+    } else if(category == 'Dating') {
+
+    } else if(category == 'Sales') {
+
+    } else if(category == 'Real Estate') {
+
+    } else if(category == 'Health & Wellness') {
+
+    } else { //Fitness
+
+    }
     
     for(let influencer of csv) {
       if(!await InfluencersSchema.findOne({usernameIG: influencer.username}) && Number(influencer.followersCount) >= 1000) { //change to IS_ADDED later?
         //ADD FOLLOWERS VALIDATION (>5k)
-        const isCorrectInfluencerTypeData = await isCorrectInfluencerType(influencer.biography, influencer.fullName, influencer.category);
+        const isCorrectInfluencerTypeData = await isCorrectInfluencerType(influencer.biography, influencer.fullName, category);
         const isCorrectInfluencer = isCorrectInfluencerTypeData[0];
         if(isCorrectInfluencer === true || isCorrectInfluencer  === 'true') {
             const isAvatarAPersonResult = await isAvatarAPerson(influencer.profilePicUrl);
@@ -232,12 +246,12 @@ const testImportFile = async(req, res, next) => {
                 const emails = [];
                 const emailsSeen = [];
                 const emailsInBio = isCorrectInfluencerTypeData[1];
-                let influencersRealName = await getInfluencersRealName(influencer.fullName, influencer.category, influencer.username, influencer.biography, influencer.externalUrl);
+                let influencersRealName = await getInfluencersRealName(influencer.fullName, category, influencer.username, influencer.biography, influencer.externalUrl);
                 const bioLinkFound = influencer.externalUrl ? await scrapeBioLinkForMoreLinks(influencer.externalUrl) : null;
                 if(bioLinkFound) {
-                    const linkType = await identifyLinkType(bioLinkFound, influencersRealName, influencer.category);
+                    const linkType = await identifyLinkType(bioLinkFound, influencersRealName, category);
                     if(String(linkType) === 'MINI-SITE') {
-                        const getInfuencersWebsiteDomain = await scrapeForInfluencersWebsiteDomain(bioLinkFound, influencersRealName, influencer.category);
+                        const getInfuencersWebsiteDomain = await scrapeForInfluencersWebsiteDomain(bioLinkFound, influencersRealName, category);
                         if(getInfuencersWebsiteDomain !== 'null' && getInfuencersWebsiteDomain !== null) {
                             influencerToAdd.domain = getInfuencersWebsiteDomain;
                         }
@@ -292,7 +306,7 @@ const testImportFile = async(req, res, next) => {
 
                 influencerToAdd.followersTotal = influencerToAdd.followersIG;
                 influencerToAdd.followersTotalNum = influencerToAdd.followersIGNum;
-                influencerToAdd.category = influencer.category;
+                influencerToAdd.category = category;
 
                 //CALCULATE INFLUENCERS ENGAGEMENT RATE (last 10 posts)
                 const latestPost0CommentsCount = Number(influencer['latestPosts/0/commentsCount']) || 0;
@@ -445,7 +459,7 @@ const convertToNumber = (input) => {
 
 const areAllRowsValid = ((influencer) => {
     if(influencer.firstName && influencer.usernameIG && influencer.profilePic && 
-       influencer.followersTotal && influencer.category && influencer.updatedDate) {
+       influencer.followersTotal && category && influencer.updatedDate) {
         return true;
     }
     return false;

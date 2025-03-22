@@ -6,7 +6,6 @@ const fetchAllInfluencers = async(req, res, next) => {
     const sorting = { 'firstName': -1 };
     const filter = req.query;
     const query = { $and: [] }; // Initialize $and operator as an array
-    console.log(filter)
 
 
     if(filter.platform) {
@@ -20,8 +19,8 @@ const fetchAllInfluencers = async(req, res, next) => {
     if(filter.category) {
         query.$and.push({ category: filter.category });
     }
-    if(filter.keywords) {
-        query.$and.push({ keywords: { $regex: filter.keywords, $options: 'i' } }); // Case-insensitive keyword search
+    if(filter.keywordSearch) {
+        query.$and.push({ name: { $regex: filter.keywordSearch, $options: 'i' } }); // Case-insensitive keyword search
     }
     
     if(filter.excludesInfluencersInLists === 'true' || filter.excludesInfluencersInLists === true) {

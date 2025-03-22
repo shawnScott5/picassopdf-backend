@@ -9,7 +9,6 @@ const myCampaigns = async(req, res, next) => {
         const filter = req.query;
         const query = { $and: [] }; // Initialize $and operator as an array
         query.$and.push({ userId: filter.userId });
-        console.log(filter)
     
         if(filter.paymentType) {
             query.$and.push({ compensationDuration: filter.paymentType });
@@ -18,12 +17,11 @@ const myCampaigns = async(req, res, next) => {
         if(filter.status) {
             query.$and.push({ status: filter.status });
         }
-        console.log(query)
+
         const campaigns = await CampaignSchema.find(query)
             .sort(sorting)
             .skip((filter && filter.page) ? parseInt(filter.limit) * (parseInt(filter.page) - 1) : 0)
             .limit(parseInt(filter.limit));
-        console.log(campaigns.length)
     
         return res.status(200).json({
             status: true,
@@ -54,7 +52,7 @@ const updateCampaign = async(req, res, next) => {
 
 const deleteCampaign = async(req, res, next) => {
      const form = req.query;
-        console.log(req.query)
+
         const campaignToDelete = {
             userId: form.userId,
             _id: form.campaignId

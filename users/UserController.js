@@ -357,7 +357,25 @@ const updateAvatar = async (req, res) => {
         const user = await UserSchema.findOne({_id: form.userId});
 
         if(user) {
-            await UserSchema.updateOne({ _id: form.userId }, { $set: { avatar: form.avatar}}, {new: true});
+            if(form.avatar && !user.avatar) {
+                const updatedAvatar = await UserSchema.updateOne({ _id: form.userId }, { $set: { avatar: form.avatar}}, {new: true});
+                if(!updatedAvatar) {
+                    return res.status(500).json({ error: "Something went wrong" });
+                }
+            }
+
+            if(form.password) {
+                const hashedPassword = await bcrypt.hash(form.password, 10);
+                const updatedProfile = await UserSchema.updateOne({ _id: form.userId }, { $set: { password: hashedPassword}}, {new: true});
+                if(!updatedProfile) {
+                    return res.status(500).json({ error: "Something went wrong" });
+                }
+            }
+
+            return res.status(200).json({
+                message: 'Profile was updated successfully!',
+                data: user
+            });
         }
     } catch (error) {
         return res.status(500).json({ error: "Something went wrong" });
