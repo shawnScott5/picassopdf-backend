@@ -10,6 +10,8 @@ dotenv.config();
 const storage = multer.diskStorage({});
 const upload = multer({ storage }); 
 const hunterIoApiKey = process.env.HUNTER_IO_API_KEY;
+const snovIoUserId = process.env.SNOV_USER_ID;
+const snovIoSecret = process.env.SNOV_SECRET;
 const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY;
 const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET;
 const openAiApiKey = process.env.OPENAI_API_KEY;
@@ -25,35 +27,53 @@ const openai = new OpenAI({
     apiKey: openAiApiKey, // Replace with your OpenAI API key
 });
 
-
+/*
 // Function to fetch emails by domain
-const getEmailsByDomain = async(firstName, domain) => {
+const getEmailsByDomain = async (firstName, domain) => {
+    // Extract domain from the URL
     const match = domain.match(/:\/\/(?:www\.)?([^/]+)/);
     const domainEmail = match ? match[1] : null;
-    const possibleEmail = `${firstName}${'@'}${domainEmail}`;
+
+    if (!domainEmail) return null; // Early return if no valid domain
+
+    const possibleEmail = `${firstName}@${domainEmail}`;
 
     const url = `https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${hunterIoApiKey}`;
     const url2 = `https://api.hunter.io/v2/email-verifier?email=${possibleEmail}&api_key=${hunterIoApiKey}`;
 
     try {
-        // Make the GET request
+        // Fetch domain search response
         const response = await fetch(url);
 
-        // Check if the response contains emails
-        if (response) {
-            if(_.isEmpty(response?.data?.emails)) {
-                const response2 = await fetch(url2);
-
-                return response2.json() || null;
-            }
-            return response.json();
-        } else {
+        if (!response.ok) {
+            console.error('Error fetching domain search data:', response.status);
             return null;
         }
+
+        const data = await response.json();
+
+        // Check if any emails are found in the domain search
+        if (_.isEmpty(data?.data?.emails)) {
+            // If no emails, verify the possible email
+            const response2 = await fetch(url2);
+
+            if (!response2.ok) {
+                console.error('Error verifying email:', response2.status);
+                return null;
+            }
+
+            return response2.json();
+        }
+
+        // Return domain search emails if available
+        return data;
+
     } catch (error) {
+        console.error('Error fetching from Hunter.io:', error);
         return null;
     }
-}
+};
+*/
 
 // Async function to make the request
 const isCorrectInfluencerType = async(bio, profileName, category) => {
@@ -67,15 +87,18 @@ const isCorrectInfluencerType = async(bio, profileName, category) => {
                     content: `Can you parse this Instagram influencers account bio "${bio}" and profile name "${profileName}", and tell me if this influencer is 
                     a ${category}. Can you please reply with only an array. If this influencer is a ${category}, please reply with only "true" 
                     as the first element in the array. If this influencer is not a ${category}, please reply with only "false" as the first 
-                    element in the array. Next, if you see any emails listed in their bio, please inject an array with any emails found as the second element
+                    element in the array. 
+                    
+                    Next, if you see any emails listed in their bio, please inject an array with any emails found as the second element
                     in the array you return. if you do not see any emails listed in their bio, please inject an empty array as the second element
                     in the array that you return. So you should only be returning an array with those 2 values inside.`
                 },
-            ],
+            ]
         });
-
-        return JSON.parse(completion.choices[0].message.content);
+        const data = JSON.parse(completion.choices[0].message.content);
+        return data;
     } catch (error) {
+
     }
 }
 
@@ -125,11 +148,14 @@ const getInfluencersRealName = async(name, category, username, bio, bioLink) => 
                     },
                 ],
             });
-    
-            return completion2.choices[0].message.content;
+            const data = completion2.choices[0].message.content;
+            return data;
         }
-        return completion.choices[0].message.content;
+
+        const data = completion.choices[0].message.content;
+        return data;
     } catch (error) {
+
     }
 }
 
@@ -138,32 +164,37 @@ const isAvatarAPerson = async(url) => {
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini", // Replace with the appropriate model, if needed
         messages: [
-            {
-                role: "user",
+            { 
+                role: "user", 
                 content: [
                     { 
                         type: "text", 
-                        text: `Here is the link to an instagram influencers profile picture/avatar. I have a list of instagram 
-                        influencer pages but some pages are fake and some are company pages. I want to filter out both. 
-                        I only want pages that are real and ran by a person/the influencer themself. Typically if the 
-                        pages' profile picture is not a person/the influencer themself, then it's either a fake page or 
-                        a company page. If this url is a picture of a person/the influencer themself then please reply 
-                        with only "true". If it is not a picture of a person, then please reply with only "false".` 
+                        text: `I have a list of Instagram influencer profiles, and some pages are fake or company-run. I want to filter out fake and company pages.  
+                        I have a URL to the influencer's profile picture/avatar: "${url}". Typically, if the profile picture is not of a **real person** or **the influencer themselves**, it’s either a fake page or a company page.  
+                        Please analyze the image and determine if the profile picture is of the influencer themselves.  
+                        - If the image is of a **real person** or the **influencer themselves**, respond with **"true"**.  
+                        - If the image is not of the influencer (e.g., a company logo or stock image), respond with **"false"**.  
+                        
+                        **Response Format (Strictly return only:**  
+                        - **"true"** (if it’s a person/influencer)  
+                        - **"false"** (if not a person/influencer)`
                     },
                     {
                         type: "image_url",
-                        image_url: {
-                            url: url
-                        },
+                        image_url: { 
+                            url: url 
+                        }
                     },
-                ],
-            },
+                ]
+            }
         ],
         max_tokens: 300,
     });
 
-    return JSON.parse(response.choices[0].message.content);
+    const data = await JSON.parse(response.choices[0].message.content);
+    return data;
   } catch (error) {
+
   }
 }
 
@@ -175,13 +206,25 @@ const scrapeForInfluencersWebsiteDomain = async(links, name, category) => {
             messages: [
                 { 
                     role: "user", 
-                    content: `"${links}", do any of the links in this array point to the official business website of instagram influencer "${name}" who is a "${category}"? If you can detect the business website link, reply with only the link. if you cannot detect the link, then reply with only "null". Please return only 1 link.`
-                },
-            ],
+                    content: `Analyze the following array of links:  
+                    - **Links:** "${links}"  
+                    - **Influencer Name:** "${name}"  
+                    - **Category:** "${category}"  
+            
+                    Identify the **official business website** of the influencer by following these rules:  
+                    - Prioritize the **shortest root domain** (e.g., "example.com" over "sub.example.com").  
+                    - Ignore subdomains unless no root domain exists.  
+                    - If multiple links share the same root domain, return the **simplest, shortest** one (without quotes). 
+                    - If no business website is found, return **"null"** (without quotes).  
+            
+                    **Response Format (Strictly return only 1 link or "null", no extra text):**`
+                }
+            ]
         });
 
         return completion.choices[0].message.content;
     } catch (error) {
+
     }
 }
 
@@ -193,13 +236,27 @@ const identifyLinkType = async(link, name, category) => {
             messages: [
                 { 
                     role: "user", 
-                    content: `Is "${link}" a mini-site that allows influencers, businesses, and individuals to share multiple links in one place, or is it a direct link to the official business website of instagram influencer "${name}" who is a "${category}" ? If it is a mini-site please reply with only "MINI-SITE". If it is a business website please reply with only "BUSINESS-SITE". If it is neither a mini-site link or official business website link, then please reply with only "null".`
-                },
-            ],
+                    content: `Analyze the following link and classify it accordingly:  
+                    - **Link:** "${link}"  
+                    - **Influencer Name:** "${name}"  
+                    - **Category:** "${category}"  
+            
+                    Determine if the link falls into one of these categories:  
+                    - **MINI-SITE** → A multi-link mini-site (e.g., Linktree, Beacons, Tap.bio, etc.).  
+                    - **BUSINESS-SITE** → The influencer’s official business website.  
+                    - **"null"** → If the link is neither a mini-site nor an official business website.  
+            
+                    **Response Format (Strictly return only one of the following, no extra text):**  
+                    - **MINI-SITE**  
+                    - **BUSINESS-SITE**  
+                    - **"null"**`
+                }
+            ]
         });
 
         return completion.choices[0].message.content;
     } catch (error) {
+        
     }
 }
 
@@ -215,30 +272,26 @@ const getUsername = async(url) => {
     const urlObj = new URL(url); // Create a URL object
     const parts = urlObj.pathname.split("/").filter(Boolean); // Get path parts
     return parts[0]; // The first non-empty part is the username
-  }
+}
 
 const testImportFile = async(req, res, next) => {
     const csv = req.body;
     let category = csv.data.category;
+
     if(category == 'Update DB') {
+        await mapVerifiedEmailsToInfluencers(csv.data.data);
+    } else {
+        const allPossibleEmails = [];
 
-    } else if(category == 'Dating') {
+     for(let influencer of csv.data.data) {
+      if(!await InfluencersSchema.findOne({usernameIG: influencer.username}) && Number(influencer.followersCount) >= 1000) {
 
-    } else if(category == 'Sales') {
-
-    } else if(category == 'Real Estate') {
-
-    } else if(category == 'Health & Wellness') {
-
-    } else { //Fitness
-
-    }
-    
-    for(let influencer of csv) {
-      if(!await InfluencersSchema.findOne({usernameIG: influencer.username}) && Number(influencer.followersCount) >= 1000) { //change to IS_ADDED later?
-        //ADD FOLLOWERS VALIDATION (>5k)
         const isCorrectInfluencerTypeData = await isCorrectInfluencerType(influencer.biography, influencer.fullName, category);
+        if (!isCorrectInfluencerTypeData || !Array.isArray(isCorrectInfluencerTypeData) || isCorrectInfluencerTypeData.length < 2) {
+            return res.status(400).json({ error: 'Invalid influencer type data' });
+        }
         const isCorrectInfluencer = isCorrectInfluencerTypeData[0];
+
         if(isCorrectInfluencer === true || isCorrectInfluencer  === 'true') {
             const isAvatarAPersonResult = await isAvatarAPerson(influencer.profilePicUrl);
             if(isAvatarAPersonResult === true || isAvatarAPersonResult === 'true') {
@@ -246,17 +299,21 @@ const testImportFile = async(req, res, next) => {
                 const emails = [];
                 const emailsSeen = [];
                 const emailsInBio = isCorrectInfluencerTypeData[1];
+
+                influencerToAdd.category = `${category} Coach`;
                 let influencersRealName = await getInfluencersRealName(influencer.fullName, category, influencer.username, influencer.biography, influencer.externalUrl);
-                const bioLinkFound = influencer.externalUrl ? await scrapeBioLinkForMoreLinks(influencer.externalUrl) : null;
-                if(bioLinkFound) {
-                    const linkType = await identifyLinkType(bioLinkFound, influencersRealName, category);
+                const linkType = influencer.externalUrl ? await identifyLinkType(influencer.externalUrl, influencersRealName, category) : null;
+                
+                if(linkType !== null && linkType !== 'null') {
+                    const bioLinksFound = await scrapeBioLinkForMoreLinks(influencer.externalUrl);
+                    
                     if(String(linkType) === 'MINI-SITE') {
-                        const getInfuencersWebsiteDomain = await scrapeForInfluencersWebsiteDomain(bioLinkFound, influencersRealName, category);
+                        const getInfuencersWebsiteDomain = await scrapeForInfluencersWebsiteDomain(bioLinksFound, influencersRealName, category);
                         if(getInfuencersWebsiteDomain !== 'null' && getInfuencersWebsiteDomain !== null) {
-                            influencerToAdd.domain = getInfuencersWebsiteDomain;
+                            influencerToAdd.domain = String(getInfuencersWebsiteDomain).replace(/^["']|["']$/g, '');
                         }
                     } else if(String(linkType) === 'BUSINESS-SITE') {
-                        influencerToAdd.domain = bioLinkFound;
+                        influencerToAdd.domain = String(influencer.externalUrl).replace(/^["']|["']$/g, '');
                     }
                 } else {
                     influencerToAdd.domain = null;
@@ -269,44 +326,58 @@ const testImportFile = async(req, res, next) => {
                 influencerToAdd.followersIG = formatNumberToSuffix(Number(influencer.followersCount));
                 influencerToAdd.followersIGNum = Number(influencer.followersCount); //convertToNumber(String(followersIG)) || 0;
 
-                //find emails using the hunter.io API & import into Influencer object
-                if(influencerToAdd.domain && influencerToAdd.firstName) {
-                    const hunterIoData = await getEmailsByDomain(influencerToAdd.firstName, influencerToAdd.domain); //can also extract youtube, facebook, x, tiktok urls!!!!
-                    const emailList = hunterIoData?.data?.emails || hunterIoData?.data?.email;
-                    if(_.isArray(emailList)) {
-                        emailList?.forEach(email => emails.push(email.value));
-                        if(emailsInBio.length) {
-                            emailsInBio.forEach((email) => {
-                                if(!emailsSeen.includes(email)) {
-                                    emails.push(email);
-                                    emailsSeen.push(email);
-                                }
-                            });
+                if (influencerToAdd.domain && influencerToAdd.firstName) {
+                    const cleanDomain = String(influencerToAdd.domain).replace(/^["']|["']$/g, ''); // Removes leading/trailing quotes
+                    const match = cleanDomain.match(/:\/\/(?:www\.)?([^/]+)/);
+                    const domainEmail = match ? match[1] : null;
+
+                    if (domainEmail) {
+                        const possibleEmail = `${influencerToAdd.firstName.toLowerCase()}@${domainEmail}`;
+                        influencerToAdd.possibleEmails = [possibleEmail];
+                        // Check if lastName is present and add more variations
+                        if (influencerToAdd.lastName) {
+                            const firstNameLower = influencerToAdd.firstName.toLowerCase();
+                            const lastNameLower = influencerToAdd.lastName.toLowerCase();
+
+                            // Add variations to the possibleEmails array
+                            influencerToAdd.possibleEmails.push(`${firstNameLower}${lastNameLower}@${domainEmail}`);  // firstname + lastname
+                            influencerToAdd.possibleEmails.push(`${firstNameLower}.${lastNameLower}@${domainEmail}`);  // firstname.lastName
+                            influencerToAdd.possibleEmails.push(`${firstNameLower.charAt(0)}${lastNameLower}@${domainEmail}`);  // first initial + lastname
                         }
-                    } else {
-                        emails.push(emailList)
+                        allPossibleEmails.push(possibleEmail);
+                    }
+
+                    if(emailsInBio.length) {
+                        emailsInBio.forEach((email) => {
+                            if(!emailsSeen.includes(email)) {
+                                emails.push(email);
+                                emailsSeen.push(email);
+                            }
+                        });
                     }
                     
                     influencerToAdd.emails = emails;
-                    influencerToAdd.profileUrlFacebook = hunterIoData?.data?.facebook;
-                    influencerToAdd.profileUrlX = hunterIoData?.data?.twitter;
-                    influencerToAdd.profileUrlYoutube = hunterIoData?.data?.youtube;
-                    influencerToAdd.profileUrlLinkedIn = hunterIoData?.data?.linkedin;
+                    //influencerToAdd.profileUrlFacebook = hunterIoData?.data?.facebook;
+                    //influencerToAdd.profileUrlX = hunterIoData?.data?.twitter;
+                    //influencerToAdd.profileUrlYoutube = hunterIoData?.data?.youtube;
+                    //influencerToAdd.profileUrlLinkedIn = hunterIoData?.data?.linkedin;
                 } else {
                     influencerToAdd.emails = [];
                 }
 
-                // Upload profile pic to Cloudinary API & then save Cloudinary url in MongoDB
-                try {
-                    const cloudinaryImg = await cloudinary.uploader.upload(influencer.profilePicUrl);
-                    influencerToAdd.profilePic = cloudinaryImg;
-                } catch(error) {
-
+                if (influencer.profilePicUrl) {
+                    try {
+                        const cloudinaryImg = await cloudinary.uploader.upload(influencer.profilePicUrl);
+                        influencerToAdd.profilePic = cloudinaryImg;
+                    } catch (error) {
+                        console.error('Error uploading profile picture:', error);
+                    }
+                } else {
+                    console.log('No profile picture URL provided');
                 }
 
                 influencerToAdd.followersTotal = influencerToAdd.followersIG;
                 influencerToAdd.followersTotalNum = influencerToAdd.followersIGNum;
-                influencerToAdd.category = category;
 
                 //CALCULATE INFLUENCERS ENGAGEMENT RATE (last 10 posts)
                 const latestPost0CommentsCount = Number(influencer['latestPosts/0/commentsCount']) || 0;
@@ -377,12 +448,54 @@ const testImportFile = async(req, res, next) => {
                 influencerToAdd.country = influencer.country;
 
                 influencerToAdd.updatedDate = new Date().toLocaleString();
-                if(areAllRowsValid(influencerToAdd)) {
-                    //await InfluencersSchema.create(influencerToAdd);
+                if (areAllRowsValid(influencerToAdd)) {
+                    try {
+                        await InfluencersSchema.create(influencerToAdd);
+                    } catch (error) {
+                        console.error('Error saving influencer:', error);
+                    }
+                } else {
+                    console.log('Invalid influencer data, skipping save');
                 }
             }
         }
       }
+     }
+        // Return all possible emails to frontend for CSV export
+        res.json({ possibleEmails: allPossibleEmails });
+    }
+}
+
+const mapVerifiedEmailsToInfluencers = async (emails) => {
+    for (const email of emails) {
+        const snovEmail = email.Email;
+        const emailStatus = email['Email status'];
+        const influencer = await InfluencersSchema.findOne({ possibleEmails: { $in: [snovEmail] } });
+
+        if (influencer) {
+            if (emailStatus == "valid") {
+                // 3️⃣ Check if email already exists in the "emails" array
+                if (!influencer.emails.includes(snovEmail)) {
+                    influencer.emails.push(snovEmail);
+
+                    // 4️⃣ Save the updated document
+                    await influencer.save();
+                    console.log(`✅ Added verified email ${snovEmail} to ${influencer.usernameIG}`);
+                } else {
+                    console.log(`⚠️ Email ${snovEmail} already exists for ${influencer.usernameIG}`);
+                }
+            } else {
+                // 5️⃣ Remove the email from the "possibleEmails" array if the status is not valid
+                const emailIndex = influencer.possibleEmails.indexOf(snovEmail);
+                if (emailIndex > -1) {
+                    influencer.possibleEmails.splice(emailIndex, 1);
+                    await influencer.save();
+                    console.log(`❌ Removed invalid email ${snovEmail} from ${influencer.usernameIG}'s possibleEmails`);
+                }
+            }
+        } else {
+            console.log(`❌ No influencer found for email: ${snovEmail}`);
+        }
     }
 }
 
@@ -459,7 +572,7 @@ const convertToNumber = (input) => {
 
 const areAllRowsValid = ((influencer) => {
     if(influencer.firstName && influencer.usernameIG && influencer.profilePic && 
-       influencer.followersTotal && category && influencer.updatedDate) {
+       influencer.followersTotal && influencer.category && influencer.updatedDate) {
         return true;
     }
     return false;
@@ -506,24 +619,37 @@ const getUpdatedDataFromApify = async(req, res, next) => {
 }
 
 
-const scrapeLink = async(url) => {
-    // Launch browser
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
-    
-    // Navigate to the URL
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
+const scrapeLink = async (url) => {
+    let browser;
+    try {
+        // Launch browser with some options for better performance
+        browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        const page = await browser.newPage();
 
-    // Extract all links
-    const links = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll('a')).map(a => a.href);
-    });
+        // Navigate to the URL and wait until DOM is fully loaded
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
 
-    // Close browser
-    await browser.close();
+        // Extract all links
+        const links = await page.evaluate(() => {
+            return Array.from(document.querySelectorAll('a'))
+                .map(a => a.href)
+                .filter(href => href); // Filter out null or undefined hrefs
+        });
 
-    return links;
-}
+        return links;
+    } catch (error) {
+        return []; // Return an empty array if an error occurs
+    } finally {
+        // Ensure the browser is always closed
+        if (browser) {
+            await browser.close();
+        }
+    }
+};
+
 
 const canAddInfluencer = async(req, res, next) => {
     

@@ -115,6 +115,10 @@ const InfluencersSchema = new mongoose.Schema({
         type: Array,
         require: false
     },
+    possibleEmails: {
+        type: Array,
+        require: false
+    },
     phoneNumber: {
         type: String
     },

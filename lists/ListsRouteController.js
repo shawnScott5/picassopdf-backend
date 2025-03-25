@@ -1,5 +1,6 @@
 import config from '../config/config.js';
 import ListsSchema from './ListsSchema.js'
+import InfluencersSchema from '../influencers/InfluencersSchema.js';
 
 const createNewList = async(req, res, next) => {
     const form = req.body;
@@ -28,31 +29,25 @@ const updateList = async(req, res, next) => {
     influencersInList.push(form.newInfluencer)
     
     let updatedList = await ListsSchema.findOneAndUpdate({ userId: form.userId, name: form.listName }, { $set: { influencers: influencersInList, updatedDate:  new Date().toLocaleString()}}, { new: true });
+
+     // Update the influencers collection: Add userId to inUsersListAlready array
+     await InfluencersSchema.findOneAndUpdate(
+        { _id: form.newInfluencer._id },
+        { $addToSet: { inUsersListAlready: form.userId } } // Add userId (preventing duplicates)
+    );
+
     if (updatedList) {
         return res.status(200).json({
             status: true,
             message: 'List was updated successfully!'
         });
+    } else {
+        return res.status(500).json({error: 'Something went wrong'});
     }
-
-     // Update the influencers collection: Add userId to inUsersListAlready array
-     await InfluencersSchema.findOneAndUpdate(
-        { _id: form.influencer },
-        { $addToSet: { inUsersListAlready: form.userId } } // Add userId (preventing duplicates)
-    );
-
-    // Update the influencers collection: Add userId to inUsersListAlready array
-    await InfluencersSchema.findOneAndUpdate(
-        { _id: form.influencer },
-        { $addToSet: { hideFromUsers: form.userId } } // Add userId (preventing duplicates)
-    );
-
-    return res.status(500).json({error: 'Something went wrong'});
 }
 
 const deleteList = async(req, res, next) => {
-    const form = req.query;
-       console.log(req.query)
+       const form = req.query;
        const listToDelete = {
            userId: form.userId,
            _id: form.listId

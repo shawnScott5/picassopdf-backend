@@ -7,7 +7,6 @@ const fetchAllInfluencers = async(req, res, next) => {
     const filter = req.query;
     const query = { $and: [] }; // Initialize $and operator as an array
 
-
     if(filter.platform) {
         //query.$and.push({ platform: filter.platform }); UNCOMMENT LATER ONCE INFLUENCERS IN DB HAVE THIS FIELD ADDED
     }
