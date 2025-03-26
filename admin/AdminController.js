@@ -102,6 +102,28 @@ const isCorrectInfluencerType = async(bio, profileName, category) => {
     }
 }
 
+// Async function to make the request
+const isCorrectLeadType = async(bio, profileName) => {
+    try {
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4",
+            store: true,
+            messages: [
+                { 
+                    role: "user", 
+                    content: `Please parse this Instagram users account bio "${bio}" and profile name "${profileName}", and tell me if this influencer is 
+                    a freelance copywriter that helps online businesses, online coaches or online influencers that sell info products grow/generate more revenue.
+                    If the answer is yes, please reply with only "true". If the answer is no, or if you arent sure/confident in your answer, please reply with only "false".`
+                },
+            ]
+        });
+        const data = JSON.parse(completion.choices[0].message.content);
+        return data;
+    } catch (error) {
+
+    }
+}
+
 const getInfluencersRealNameLastTry = async(username, bio, bioLink) => {
     try {
         const completion = await openai.chat.completions.create({
@@ -277,9 +299,14 @@ const getUsername = async(url) => {
 const testImportFile = async(req, res, next) => {
     const csv = req.body;
     let category = csv.data.category;
+    let influencerIndex = 0; // To track the loop iteration
+    let savedCount = 0; // To count successfully saved influencers
 
     if(category == 'Update DB') {
         await mapVerifiedEmailsToInfluencers(csv.data.data);
+    } else if(category == 'Clean List') {
+        const leads = await cleanLeadList(csv.data.data);
+        res.json({ verifiedLeads: leads });
     } else {
         const allPossibleEmails = [];
 
@@ -288,7 +315,7 @@ const testImportFile = async(req, res, next) => {
 
         const isCorrectInfluencerTypeData = await isCorrectInfluencerType(influencer.biography, influencer.fullName, category);
         if (!isCorrectInfluencerTypeData || !Array.isArray(isCorrectInfluencerTypeData) || isCorrectInfluencerTypeData.length < 2) {
-            return res.status(400).json({ error: 'Invalid influencer type data' });
+            continue;
         }
         const isCorrectInfluencer = isCorrectInfluencerTypeData[0];
 
@@ -350,8 +377,8 @@ const testImportFile = async(req, res, next) => {
                     if(emailsInBio.length) {
                         emailsInBio.forEach((email) => {
                             if(!emailsSeen.includes(email)) {
-                                emails.push(email);
-                                emailsSeen.push(email);
+                                emails.push(String(email).replace(/^["']|["']$/g, ''));
+                                emailsSeen.push(String(email).replace(/^["']|["']$/g, ''));
                             }
                         });
                     }
@@ -451,6 +478,7 @@ const testImportFile = async(req, res, next) => {
                 if (areAllRowsValid(influencerToAdd)) {
                     try {
                         await InfluencersSchema.create(influencerToAdd);
+                        savedCount++; // Increment the saved count
                     } catch (error) {
                         console.error('Error saving influencer:', error);
                     }
@@ -460,9 +488,12 @@ const testImportFile = async(req, res, next) => {
             }
         }
       }
-     }
-        // Return all possible emails to frontend for CSV export
-        res.json({ possibleEmails: allPossibleEmails });
+      influencerIndex++;
+      console.log(`✅ Row #${influencerIndex} complete. Influencers Saved: ${savedCount} / Influencers Processed: ${influencerIndex}`);
+     }  
+     console.log(`🎉 Import completed. Total Influencers Saved: ${savedCount} / Total influencers Processed: ${influencerIndex}` );
+     // Return all possible emails to frontend for CSV export
+     res.json({ possibleEmails: allPossibleEmails });
     }
 }
 
@@ -499,32 +530,16 @@ const mapVerifiedEmailsToInfluencers = async (emails) => {
     }
 }
 
-const scrapeProfileLinks = async(username) => {
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
+const cleanLeadList = async (leads) => {
+    const verifiedLeads = [];
 
-    try {
-        // Go to the Instagram profile page
-        const profileUrl = `https://www.instagram.com/${username}/`;
-        await page.goto(profileUrl, { waitUntil: 'networkidle2' });
-
-        // Wait for the main content to load
-        await page.waitForSelector('a');
-
-        // Extract all links on the page
-        const links = await page.evaluate(() => {
-            return Array.from(document.querySelectorAll('a'))
-            .map(a => a.href)
-            .filter(href => !href.includes('instagram.com')); // Exclude Instagram links
-        });
-
-        return links;
-
-    } catch (error) {
-        return null;
-    } finally {
-        await browser.close();
+    for(let lead of leads) {
+        const isCorrectLead = await isCorrectLeadType(lead.Biography, lead['Full name']);
+        if(isCorrectLead === 'true' ||isCorrectLead === true ) {
+            verifiedLeads.push(lead);
+        }
     }
+    return verifiedLeads;
 }
 
 const formatNumberToSuffix = (num) => {

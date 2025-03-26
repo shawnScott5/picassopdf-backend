@@ -17,23 +17,35 @@ const UserSchema = new mongoose.Schema({
         type: String,
         require: true
     },
-    recurringRevenue: {
+    thisMonthRecurringRevenue: {
         type: Number,
         default: 0
     },
-    thisMonthRevenue: {
+    thisMonthTotalRevenue: {
         type: Number,
         default: 0
     },
-    totalClients: {
+    lastMonthRecurringRevenue: {
         type: Number,
         default: 0
     },
-    lastMonthClients: {
+    lastMonthTotalRevenue: {
         type: Number,
         default: 0
     },
-    newClients: {
+    thisMonthTotalClients: {
+        type: Number,
+        default: 0
+    },
+    lastMonthTotalClients: {
+        type: Number,
+        default: 0
+    },
+    lastMonthNewClients: {
+        type: Number,
+        default: 0
+    },
+    thisMonthNewClients: {
         type: Number,
         default: 0
     },

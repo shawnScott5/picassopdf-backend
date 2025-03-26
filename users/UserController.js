@@ -7,6 +7,7 @@ import cloudinary from 'cloudinary';
 import UserTokenSchema from '../users/UserTokenSchema.js';
 import debounce from 'lodash.debounce';
 import Stripe from "stripe";
+import CampaignsSchema from '../campaigns/CampaignsSchema.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
     apiVersion: '2024-04-10'
@@ -168,6 +169,44 @@ const me = async(req, res, next) => {
                 }}, { new: true });
         }
 
+        const currentDate = new Date();
+        if (currentDate.toLocaleDateString('en-US', { day: 'numeric' }) === '1') {
+            await UserSchema.findByIdAndUpdate(user._id, { thisMonthNewClients: 0, thisMonthTotalRevenue: user.thisMonthRecurringRevenue }, { new: true });
+        }
+
+        const date = new Date();
+        const currentMonth = date.getMonth() + 1;
+        const currentYear = date.getFullYear();
+        const campaigns = await CampaignsSchema.find({ userId: user._id, compensationDuration: 'One-Time Payment', isPaid: false });
+        const currentMonthName = date.toLocaleString('en-US', { month: 'long' });
+        
+        const lastMonth = new Date();
+        lastMonth.setMonth(date.getMonth() - 1);
+        const lastMonthName = lastMonth.toLocaleString('en-US', { month: 'long' });
+
+        for (const campaign of campaigns) {
+            const campaignDate = new Date(campaign.startDate);
+            if (campaignDate.getMonth() + 1 === currentMonth && campaignDate.getFullYear() === currentYear) {
+                const updateFields = { $inc: { thisMonthTotalRevenue: campaign.compensation } };
+                
+                await UserSchema.findByIdAndUpdate(user._id, updateFields, { new: true });
+                await CampaignsSchema.findByIdAndUpdate(campaign._id, { isPaid: true }, { new: true });
+            }
+        }
+
+        if(user.thisMonthName.toLowerCase() != currentMonthName.toLowerCase()) {
+            await UserSchema.findByIdAndUpdate(user._id, {
+                lastMonthTotalRevenue: user.thisMonthTotalRevenue,
+                lastMonthRecurringRevenue: user.thisMonthRecurringRevenue,
+                lastMonthTotalClients: user.thisMonthTotalClients,
+                lastMonthNewClients: user.thisMonthNewClients,
+                thisMonthNewClients: 0,
+                thisMonthTotalRevenue: user.thisMonthRecurringRevenue,
+                thisMonthName: currentMonthName,
+                lastMonthName: lastMonthName
+            }, { new: true });
+        }
+
         //fetch final user object
         const finalUser = await UserSchema.findById({_id: request.userId});
         return res.status(200).json({
@@ -176,10 +215,10 @@ const me = async(req, res, next) => {
                 _id: finalUser._id,
                 email: finalUser.email,
                 name: finalUser.name,
-                recurringRevenue: finalUser.recurringRevenue,
-                thisMonthRevenue: finalUser.thisMonthRevenue,
-                totalClients: finalUser.totalClients,
-                newClients: finalUser.newClients,
+                thisMonthRecurringRevenue: finalUser.thisMonthRecurringRevenue,
+                thisMonthTotalRevenue: finalUser.thisMonthTotalRevenue,
+                thisMonthTotalClients: finalUser.thisMonthTotalClients,
+                thisMonthNewClients: finalUser.thisMonthNewClients,
                 subscription: finalUser.subscription,
                 subscriptionStartDate: finalUser.subscriptionStartDate,
                 influencersEmailViewed: finalUser.influencersEmailViewed,
@@ -189,7 +228,11 @@ const me = async(req, res, next) => {
                 avatar: finalUser.avatar,
                 stripeSessionId: finalUser.stripeSessionId,
                 stripeSubscriptionId: finalUser.stripeSubscriptionId,
-                tempViewLimit: finalUser.tempViewLimit
+                tempViewLimit: finalUser.tempViewLimit,
+                lastMonthTotalRevenue: finalUser.lastMonthTotalRevenue,
+                lastMonthRecurringRevenue: finalUser.lastMonthRecurringRevenue,
+                lastMonthTotalClients: finalUser.lastMonthTotalClients,
+                lastMonthNewClients: finalUser.lastMonthNewClients
             }
         });
     }
