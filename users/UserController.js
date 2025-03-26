@@ -204,7 +204,7 @@ const me = async(req, res, next) => {
                 thisMonthTotalRevenue: user.thisMonthRecurringRevenue,
                 thisMonthName: currentMonthName,
                 lastMonthName: lastMonthName
-            }, { new: true });
+            }, { new: true } );
         }
 
         //fetch final user object
