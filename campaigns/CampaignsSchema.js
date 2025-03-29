@@ -33,7 +33,8 @@ const CampaignSchema = new mongoose.Schema({
     },
     isPaid: {
         type: Boolean,
-        required: true
+        required: true,
+        default: false
     }
 }, {timeStamps: true});
 

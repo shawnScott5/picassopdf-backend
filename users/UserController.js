@@ -146,7 +146,7 @@ const me = async(req, res, next) => {
         const today = new Date().toLocaleString();
         const todaysDate = new Date(today);
         const nextPaymentDate = new Date(user.nextPaymentDate);
-      
+       
         if(todaysDate.getTime() == nextPaymentDate.getTime() || todaysDate.getTime() > nextPaymentDate.getTime()) {
             nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
             while(todaysDate.getTime() == nextPaymentDate.getTime() || todaysDate.getTime() > nextPaymentDate.getTime()) {
@@ -169,14 +169,10 @@ const me = async(req, res, next) => {
                 }}, { new: true });
         }
 
-        const currentDate = new Date();
-        if (currentDate.toLocaleDateString('en-US', { day: 'numeric' }) === '1') {
-            await UserSchema.findByIdAndUpdate(user._id, { thisMonthNewClients: 0, thisMonthTotalRevenue: user.thisMonthRecurringRevenue }, { new: true });
-        }
-
         const date = new Date();
         const currentMonth = date.getMonth() + 1;
         const currentYear = date.getFullYear();
+        const currentDay = date.getDate(); 
         const campaigns = await CampaignsSchema.find({ userId: user._id, compensationDuration: 'One-Time Payment', isPaid: false });
         const currentMonthName = date.toLocaleString('en-US', { month: 'long' });
         
@@ -184,13 +180,35 @@ const me = async(req, res, next) => {
         lastMonth.setMonth(date.getMonth() - 1);
         const lastMonthName = lastMonth.toLocaleString('en-US', { month: 'long' });
 
-        for (const campaign of campaigns) {
-            const campaignDate = new Date(campaign.startDate);
-            if (campaignDate.getMonth() + 1 === currentMonth && campaignDate.getFullYear() === currentYear) {
-                const updateFields = { $inc: { thisMonthTotalRevenue: campaign.compensation } };
-                
+        for (const campaign of campaigns) { 
+            const startDate = new Date(campaign.startDate);
+            const endDate = new Date(campaign.endDate);
+            
+            const isStartTodayOrPast = 
+                (startDate.getFullYear() < currentYear) ||
+                (startDate.getFullYear() === currentYear && startDate.getMonth() + 1 < currentMonth) ||
+                (startDate.getFullYear() === currentYear && startDate.getMonth() + 1 === currentMonth && startDate.getDate() <= currentDay);
+            
+            const isEndTodayOrPast = 
+                (endDate.getFullYear() < currentYear) ||
+                (endDate.getFullYear() === currentYear && endDate.getMonth() + 1 < currentMonth) ||
+                (endDate.getFullYear() === currentYear && endDate.getMonth() + 1 === currentMonth && endDate.getDate() <= currentDay);
+        
+            // Add campaign compensation if startDate is today/past and isPaid is false
+            if (isStartTodayOrPast && !campaign.isPaid) {
+                const updateFields = campaign.compensationDuration === 'Per Month' 
+                    ? { $inc: { thisMonthTotalRevenue: campaign.compensation, thisMonthRecurringRevenue: campaign.compensation, thisMonthNewClients: 1, thisMonthTotalClients: 1 } }
+                    : { $inc: { thisMonthTotalRevenue: campaign.compensation, thisMonthNewClients: 1 } };
+        
                 await UserSchema.findByIdAndUpdate(user._id, updateFields, { new: true });
                 await CampaignsSchema.findByIdAndUpdate(campaign._id, { isPaid: true }, { new: true });
+            } 
+            // Deduct campaign compensation if endDate is today/past and isPaid is true
+            else if (isEndTodayOrPast && campaign.isPaid) {
+                if (campaign.compensationDuration === 'Per Month') {
+                    const updateFields = { $inc: { thisMonthTotalRevenue: -campaign.compensation, thisMonthRecurringRevenue: -campaign.compensation, thisMonthTotalClients: -1 } };
+                    await UserSchema.findByIdAndUpdate(user._id, updateFields, { new: true });
+                }
             }
         }
 
@@ -400,6 +418,11 @@ const updateAvatar = async (req, res) => {
         const user = await UserSchema.findOne({_id: form.userId});
 
         if(user) {
+            const updatedProfile = await UserSchema.updateOne({ _id: form.userId }, { $set: { name: form.name, email: form.email}}, {new: true});
+            if(!updatedProfile) {
+                return res.status(500).json({ error: "Something went wrong" });
+            }
+
             if(form.avatar && !user.avatar) {
                 const updatedAvatar = await UserSchema.updateOne({ _id: form.userId }, { $set: { avatar: form.avatar}}, {new: true});
                 if(!updatedAvatar) {
@@ -415,9 +438,10 @@ const updateAvatar = async (req, res) => {
                 }
             }
 
+            const finalUser = await UserSchema.findOne({_id: form.userId});
             return res.status(200).json({
                 message: 'Profile was updated successfully!',
-                data: user
+                data: finalUser
             });
         }
     } catch (error) {
