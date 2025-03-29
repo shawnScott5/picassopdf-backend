@@ -441,7 +441,7 @@ const updateAvatar = async (req, res) => {
             const finalUser = await UserSchema.findOne({_id: form.userId});
             return res.status(200).json({
                 message: 'Profile was updated successfully!',
-                data: finalUser
+                data: finalUser 
             });
         }
     } catch (error) {
