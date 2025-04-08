@@ -1,10 +1,10 @@
 import InfluencersSchema from '../influencers/InfluencersSchema.js';
 import multer from 'multer';
 import cloudinary from 'cloudinary';
-import _ from 'lodash';
 import puppeteer, { Puppeteer } from 'puppeteer';
 import OpenAI from "openai";
 import dotenv from 'dotenv';
+import UserSchema from '../users/UserSchema.js';
 dotenv.config();
 
 const storage = multer.diskStorage({});
@@ -15,6 +15,7 @@ const snovIoSecret = process.env.SNOV_SECRET;
 const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY;
 const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET;
 const openAiApiKey = process.env.OPENAI_API_KEY;
+const deepSeekApiKey = process.env.DEEPSEEK_API_KEY;
 //Configure Cloudinary
 cloudinary.config({
     cloud_name: 'dza3ed8yw',
@@ -25,6 +26,11 @@ cloudinary.config({
 // Initialize the OpenAI client with your API key
 const openai = new OpenAI({
     apiKey: openAiApiKey, // Replace with your OpenAI API key
+});
+
+const deepSeekAi = new OpenAI({
+    baseURL: 'https://api.deepseek.com',
+    apiKey: deepSeekApiKey
 });
 
 /*
@@ -76,23 +82,118 @@ const getEmailsByDomain = async (firstName, domain) => {
 */
 
 // Async function to make the request
-const isCorrectInfluencerType = async(bio, profileName, category) => {
+const fetchInfleuncersDataFromChatGPT = async(bio, profileName, category, username, fullName, profilePicUrl, externalUrl, bioLinksFound) => {
+    if(category == 'Dating Coach') {
+        category = 'Dating, Relationship or Marriage Coach'
+    }
+    if(category == 'Fitness Coach') {
+        category = 'Fitness/Workout Coach or Fitness/Workout Trainer'
+    }
+
     try {
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4",
+        const messages = [
+            {
+              role: "user",
+              content: `Please analyze the following Instagram influencer's profile and provide structured data:
+          
+          - **Bio:** "${bio}"
+          - **Profile Name:** "${profileName}"
+          - **Username:** "${username}"
+          - **Full Name:** "${fullName}"
+          - **Category:** "${category}"
+          - **Profile Picture URL:** "${profilePicUrl}"
+          - **External URL:** "${externalUrl}"
+          - **Bio Links Found:** ${JSON.stringify(bioLinksFound)} (array of URLs)
+          
+          **Instructions:**
+          1. **Is the influencer of the correct type?** (Based on bio and profile name)
+             - Return **true** or **false**.
+          2. **Is the profile picture of a real person (not a company logo/fake page)?**
+             - Analyze the image and return **true** (if a real person) or **false**.
+          3. **Extract any emails from the bio.**
+             - Return an array of emails found. If none, return \`[]\`.
+          4. **Parse the influencer’s real name (if available).**
+             - Return the full name or \`null\` if not present.
+          5. **Classify the external link (if provided).**
+             - Possible values: **"MINI-SITE"**, **"BUSINESS-SITE"**, or **"null"**.
+          6. **Determine the official business website from bio links.**
+             - Prioritize shortest root domain. Return the official site or \`null\`.
+          
+          **Return a single JSON object in the following format:**
+          \`\`\`json
+          {
+              "isCorrectInfluencerType": true/false,
+              "isAvatarAPerson": true/false,
+              "emailsInBio": ["email@example.com", "other@email.com"],
+              "influencerRealName": "First Last" or null,
+              "linkType": "MINI-SITE" or "BUSINESS-SITE" or "null",
+              "influencerWebsiteDomain": "example.com" or "null"
+          }
+          \`\`\`
+          
+          **Do not include any extra text, only return the JSON object.**`
+            }
+        ];
+
+        const completion = await deepSeekAi.chat.completions.create({
+            //model: "gpt-4",
+            model: 'deepseek-reasoner', // Changed from "deepseek-chat AKA" to "r1",
             store: true,
-            messages: [
-                { 
-                    role: "user", 
-                    content: `Can you parse this Instagram influencers account bio "${bio}" and profile name "${profileName}", and tell me if this influencer is 
-                    a ${category}. Can you please reply with only an array. If this influencer is a ${category}, please reply with only "true" 
-                    as the first element in the array. If this influencer is not a ${category}, please reply with only "false" as the first 
-                    element in the array. 
-                    
-                    Next, if you see any emails listed in their bio, please inject an array with any emails found as the second element
-                    in the array you return. if you do not see any emails listed in their bio, please inject an empty array as the second element
-                    in the array that you return. So you should only be returning an array with those 2 values inside.`
-                },
+            "messages": [
+                {
+                    "role": "user",
+                    "content": `Can you parse this Instagram influencer's account bio and profile name:\n\nBio: ${bio}.\n\nProfile name: ${profileName}.\n\nBased on this data, determine if this influencer is a ${category}. If so, return only the string \"true\" (without any other text). If not, return only the string \"false\" (without any other text). Do not return anything else.`
+                }
+            ]
+        });
+
+        const data = JSON.parse(completion.choices[0].message.content);
+        return data;
+    } catch (error) {
+
+    }
+}
+
+// Async function to make the request
+const isCorrectInfluencerType = async(bio, profileName, category) => {
+    if(category == 'Dating Coach') {
+        category = 'Dating, Relationship or Marriage Coach'
+    }
+    if(category == 'Fitness Coach') {
+        category = 'Fitness/Exercise Coach or Fitness/Exercise Trainer'
+    }
+
+    try {
+        const completion = await deepSeekAi.chat.completions.create({
+            //model: "gpt-4",
+            model: 'deepseek-chat', // Changed from "deepseek-chat AKA" to "deepseek-reasoner",
+            store: true,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": `Can you parse this Instagram influencer's account bio and profile name:\n\nBio: ${bio}.\n\nProfile name: ${profileName}.\n\nBased on this data, determine if this influencer is a ${category}. If so, return only the string \"true\" (without any other text). If not, return only the string \"false\" (without any other text). Do not return anything else.`
+                }
+            ]
+        });
+
+        const data = JSON.parse(completion.choices[0].message.content);
+        return data;
+    } catch (error) {
+
+    }
+}
+
+const areEmailsInBio = async(bio) => {
+    try {
+        const completion = await deepSeekAi.chat.completions.create({
+            //model: "gpt-4",
+            model: 'deepseek-chat', // Changed from "deepseek-chat AKA" to "deepseek-reasoner",
+            store: true,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": `Can you parse this Instagram influencer's account bio:\n\nBio: ${bio}.\n\nIf you find any emails in their bio, return a single array, and individually push each email found inside of the array (each email should be of type String). If no emails are found in the bio, then just return the string \"null\".`
+                }
             ]
         });
         const data = JSON.parse(completion.choices[0].message.content);
@@ -105,13 +206,14 @@ const isCorrectInfluencerType = async(bio, profileName, category) => {
 // Async function to make the request
 const isCorrectLeadType = async(bio, profileName) => {
     try {
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4",
+        const completion = await deepSeekAi.chat.completions.create({
+            //model: "gpt-4",
+            model: 'deepseek-reasoner', // Changed from "deepseek-chat AKA" to "r1",
             store: true,
             messages: [
                 { 
                     role: "user", 
-                    content: `Please parse this Instagram users account bio "${bio}" and profile name "${profileName}", and tell me if this influencer is 
+                    content: `Please parse this Instagram users account bio: "${bio}", and profile name: "${profileName}". Tell me if this influencer is 
                     a freelance copywriter that helps online businesses, online coaches or online influencers that sell info products grow/generate more revenue.
                     If the answer is yes, please reply with only "true". If the answer is no, or if you arent sure/confident in your answer, please reply with only "false".`
                 },
@@ -124,82 +226,58 @@ const isCorrectLeadType = async(bio, profileName) => {
     }
 }
 
-const getInfluencersRealNameLastTry = async(username, bio, bioLink) => {
-    try {
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4",
-            store: true,
-            messages: [
-                { 
-                    role: "user", 
-                    content: `This instagram influencers account username is "${username}", their bio link is "${bioLink}", and their bio says "${bio}". Judging by their username bio link and bio text, can you detect this instagram influencers first name? Or first and last name if possible. If you are able to detect a name, please reply with only their name. If you are not able to detect a name, please reply with only "null".`
-                },
-            ],
-        });
-
-        return completion.choices[0].message.content;
-    } catch (error) {  
-        return [];
-    }
-}
-
 const getInfluencersRealName = async(name, category, username, bio, bioLink) => {
     try {
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4",
-            store: true,
-            messages: [
-                { 
-                    role: "user", 
-                    content: `Can you parse this Instagram influencers name from this text "${name}"? This influencer is 
-                    a ${category}. The first and last name should be present but sometimes only the first name will be present. 
-                    If you can parse their name, please reply with only their name. If a name is not present, please 
-                    reply with only "null".` 
-                },
-            ],
-        });
-
-        if(completion.choices[0].message.content === null || completion.choices[0].message.content === 'null') {
-            const completion2 = await openai.chat.completions.create({
-                model: "gpt-4",
-                store: true,
-                messages: [
-                    { 
-                        role: "user", 
-                        content: `This instagram influencers account username is "${username}", their bio link is "${bioLink}", and their bio says "${bio}". Judging by their username bio link and bio text, can you detect this instagram influencers first name? Or first and last name if possible. If you are able to detect a name, please reply with only their name. If you are not able to detect a name, please reply with only "null".`
-                    },
-                ],
-            });
-            const data = completion2.choices[0].message.content;
-            return data;
+        console.log(category)
+        if(category == 'Dating Coach') {
+            category = 'Dating, Relationship or Marriage Coach'
         }
+        if(category == 'Fitness Coach') {
+            category = 'Fitness/Workout Coach or Fitness/Workout Trainer'
+        }
+
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4-turbo",
+            messages: [
+                {
+                    role: "user",
+                    content: `Try to extract the Instagram influencer's real name from their profile name or bio. This influencer is a ${category}.
+                    Name: ${name}
+                    Bio: ${bio}
+                     
+                    - The name should include both first and last names if available, but sometimes only the first name is present.  
+                    - Never return a name with "Coach" in it.
+                    - If a name is found, return their name only, no other text
+                    - If no name is found, return only "null"`
+                }
+            ]
+        });
 
         const data = completion.choices[0].message.content;
         return data;
     } catch (error) {
-
+        return null;
     }
 }
 
 const isAvatarAPerson = async(url) => {
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini", // Replace with the appropriate model, if needed
+        model: "gpt-4-turbo", // Replace with the appropriate model, if needed
         messages: [
             { 
                 role: "user", 
                 content: [
                     { 
                         type: "text", 
-                        text: `I have a list of Instagram influencer profiles, and some pages are fake or company-run. I want to filter out fake and company pages.  
-                        I have a URL to the influencer's profile picture/avatar: "${url}". Typically, if the profile picture is not of a **real person** or **the influencer themselves**, it’s either a fake page or a company page.  
-                        Please analyze the image and determine if the profile picture is of the influencer themselves.  
-                        - If the image is of a **real person** or the **influencer themselves**, respond with **"true"**.  
-                        - If the image is not of the influencer (e.g., a company logo or stock image), respond with **"false"**.  
+                        text: `I have this URL to an Instagram influencer's profile picture/avatar: "${url}". Typically, if the profile picture is not of a **real person** or **the influencer themselves**, it’s either a fake page or a company page.  
+                        I want to filter out all fake and company Instagram pages. Please analyze the image and determine if the profile picture is of the influencer themselves.  
+                        - If the image is of a **real person** or the **influencer themselves**, respond with "true".  
+                        - If the image is not of the influencer (e.g: a company logo or stock image), respond with "false".  
                         
                         **Response Format (Strictly return only:**  
-                        - **"true"** (if it’s a person/influencer)  
-                        - **"false"** (if not a person/influencer)`
+                        - "true" (if it’s a person)  
+                        - "false" (if not a person)`
                     },
                     {
                         type: "image_url",
@@ -216,69 +294,74 @@ const isAvatarAPerson = async(url) => {
     const data = await JSON.parse(response.choices[0].message.content);
     return data;
   } catch (error) {
-
+    return null;
   }
 }
 
 const scrapeForInfluencersWebsiteDomain = async(links, name, category) => {
     try {
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4",
+        if(category == 'Dating Coach') {
+            category = 'Dating, Relationship or Marriage Coach'
+        }
+        if(category == 'Fitness Coach') {
+            category = 'Fitness/Workout Coach or Fitness/Workout Trainer'
+        }
+
+        const completion = await deepSeekAi.chat.completions.create({
+            model: 'deepseek-reasoner', // Changed from "deepseek-chat AKA" to "deepseek-reasoner",
             store: true,
             messages: [
                 { 
                     role: "user", 
-                    content: `Analyze the following array of links:  
-                    - **Links:** "${links}"  
-                    - **Influencer Name:** "${name}"  
-                    - **Category:** "${category}"  
+                    content: `Analyze the following links:  
+                    - Links: ${links}" 
             
-                    Identify the **official business website** of the influencer by following these rules:  
-                    - Prioritize the **shortest root domain** (e.g., "example.com" over "sub.example.com").  
+                    Identify the **official business website** of ${name} who is a ${category} influencer, by following these rules:  
+                    - Prioritize the **shortest root domain** (e.g: "example.com" over "sub.example.com").  
                     - Ignore subdomains unless no root domain exists.  
-                    - If multiple links share the same root domain, return the **simplest, shortest** one (without quotes). 
-                    - If no business website is found, return **"null"** (without quotes).  
+                    - If multiple links share the same root domain, return the simplest, shortest link only (without quotes). 
+                    - If no business website is found, return "null" (without quotes).  
             
                     **Response Format (Strictly return only 1 link or "null", no extra text):**`
                 }
-            ]
+            ],
+            temperature: 0
         });
 
         return completion.choices[0].message.content;
     } catch (error) {
-
+        return null;
     }
 }
 
 const identifyLinkType = async(link, name, category) => {
     try {
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4",
+        const completion = await deepSeekAi.chat.completions.create({
+            //model: "gpt-4",
+            model: 'deepseek-chat', // Changed from "deepseek-chat AKA" to "deepseek-reasoner",
             store: true,
             messages: [
                 { 
                     role: "user", 
                     content: `Analyze the following link and classify it accordingly:  
-                    - **Link:** "${link}"  
-                    - **Influencer Name:** "${name}"  
-                    - **Category:** "${category}"  
+                    - Link: ${link}
             
                     Determine if the link falls into one of these categories:  
-                    - **MINI-SITE** → A multi-link mini-site (e.g., Linktree, Beacons, Tap.bio, etc.).  
-                    - **BUSINESS-SITE** → The influencer’s official business website.  
-                    - **"null"** → If the link is neither a mini-site nor an official business website.  
+                    - MINI-SITE → A multi-link mini-site (e.g: Linktree, Beacons, Tap.bio, etc.).  
+                    - BUSINESS-SITE → The influencer’s official business website.  
+                    - null → If the link is neither a mini-site nor an official business website.  
             
                     **Response Format (Strictly return only one of the following, no extra text):**  
-                    - **MINI-SITE**  
-                    - **BUSINESS-SITE**  
-                    - **"null"**`
+                    - MINI-SITE
+                    - BUSINESS-SITE  
+                    - null`
                 }
             ]
         });
 
         return completion.choices[0].message.content;
     } catch (error) {
-        
+        return null;
     }
 }
 
@@ -288,6 +371,139 @@ const scrapeBioLinkForMoreLinks = async(url) => {
   } catch (error) {
     return []
   }
+}
+
+const updateEngagementRates = async(influencers) => {
+  let index = 0;
+  let savedCount = 0;
+
+  for (let influencer of influencers) {
+    const influencerFound = await InfluencersSchema.findOne({usernameIG: influencer.username});
+
+   if(influencerFound && influencerFound != null) {
+    //CALCULATE INFLUENCERS ENGAGEMENT RATE (last 10 posts)
+    const latestPost0CommentsCount = Number(influencer['latestPosts/0/commentsCount']) || 0;
+    const latestPost0LikesCount = Number(influencer['latestPosts/0/likesCount']) || 0;
+    //const latestPost0VideoView = Number(influencer['latestPosts/0/videoViewCount']) || 0;
+    const totalPost0 = (latestPost0CommentsCount + latestPost0LikesCount);
+
+    const latestPost1CommentsCount = Number(influencer['latestPosts/1/commentsCount']) || 0;
+    const latestPost1LikesCount = Number(influencer['latestPosts/1/likesCount']) || 0;
+    //const latestPost1VideoView = Number(influencer['latestPosts/1/videoViewCount']) || 0;
+    const totalPost1 = (latestPost1CommentsCount + latestPost1LikesCount);
+
+    const latestPost2CommentsCount = Number(influencer['latestPosts/2/commentsCount']) || 0;
+    const latestPost2LikesCount = Number(influencer['latestPosts/2/likesCount']) || 0;
+    //const latestPost2VideoView = Number(influencer['latestPosts/2/videoViewCount']) || 0;
+    const totalPost2 = (latestPost2CommentsCount + latestPost2LikesCount);
+
+    const latestPost3CommentsCount = Number(influencer['latestPosts/3/commentsCount']) || 0;
+    const latestPost3LikesCount = Number(influencer['latestPosts/3/likesCount']) || 0;
+    //const latestPost3VideoView = Number(influencer['latestPosts/3/videoViewCount']) || 0;
+    const totalPost3 = (latestPost3CommentsCount + latestPost3LikesCount);
+
+    const latestPost4CommentsCount = Number(influencer['latestPosts/4/commentsCount']) || 0;
+    const latestPost4LikesCount = Number(influencer['latestPosts/4/likesCount']) || 0;
+    //const latestPost4VideoView = Number(influencer['latestPosts/4/videoViewCount']) || 0;
+    const totalPost4 = (latestPost4CommentsCount + latestPost4LikesCount);
+
+    const latestPost5CommentsCount = Number(influencer['latestPosts/5/commentsCount']) || 0;
+    const latestPost5LikesCount = Number(influencer['latestPosts/5/likesCount']) || 0;
+    //const latestPost5VideoView = Number(influencer['latestPosts/5/videoViewCount']) || 0;
+    const totalPost5 = (latestPost5CommentsCount + latestPost5LikesCount);
+
+    const latestPost6CommentsCount = Number(influencer['latestPosts/6/commentsCount']) || 0;
+    const latestPost6LikesCount = Number(influencer['latestPosts/6/likesCount']) || 0;
+    //const latestPost6VideoView = Number(influencer['latestPosts/6/videoViewCount']) || 0;
+    const totalPost6 = (latestPost6CommentsCount + latestPost6LikesCount);
+
+    const latestPost7CommentsCount = Number(influencer['latestPosts/7/commentsCount']) || 0;
+    const latestPost7LikesCount = Number(influencer['latestPosts/7/likesCount']) || 0;
+    //const latestPost7VideoView = Number(influencer['latestPosts/7/videoViewCount']) || 0;
+    const totalPost7 = (latestPost7CommentsCount + latestPost7LikesCount);
+
+    const latestPost8CommentsCount = Number(influencer['latestPosts/8/commentsCount']) || 0;
+    const latestPost8LikesCount = Number(influencer['latestPosts/8/likesCount']) || 0;
+    //const latestPost8VideoView = Number(influencer['latestPosts/8/videoViewCount']) || 0;
+    const totalPost8 = (latestPost8CommentsCount + latestPost8LikesCount);
+
+    const latestPost9CommentsCount = Number(influencer['latestPosts/9/commentsCount']) || 0;
+    const latestPost9LikesCount = Number(influencer['latestPosts/9/likesCount']) || 0;
+    //const latestPost9VideoView = Number(influencer['latestPosts/9/videoViewCount']) || 0;
+    const totalPost9 = (latestPost9CommentsCount + latestPost9LikesCount);
+
+    const latestPost10CommentsCount = Number(influencer['latestPosts/10/commentsCount']) || 0;
+    const latestPost10LikesCount = Number(influencer['latestPosts/10/likesCount']) || 0;
+    //const latestPost10VideoView = Number(influencer['latestPosts/10/videoViewCount']) || 0;
+    const totalPost10 = (latestPost10CommentsCount + latestPost10LikesCount);
+
+    const latestPost11CommentsCount = Number(influencer['latestPosts/11/commentsCount']) || 0;
+    const latestPost11LikesCount = Number(influencer['latestPosts/11/likesCount']) || 0;
+    //const latestPost11VideoView = Number(influencer['latestPosts/11/videoViewCount']) || 0;
+    const totalPost11 = (latestPost11CommentsCount + latestPost11LikesCount);
+
+    const totalEngagement = [
+        totalPost0 || 0, totalPost1 || 0, totalPost2 || 0, totalPost3 || 0, totalPost4 || 0, 
+        totalPost5 || 0, totalPost6 || 0, totalPost7 || 0, totalPost8 || 0, totalPost9 || 0, 
+        totalPost10 || 0, totalPost11 || 0
+    ];
+
+    const medianEngagement = getMedianEngagement(totalEngagement);
+    const engagementRate = (medianEngagement / Number(influencerFound.followersIGNum)) * 100;
+    const newEngagement = parseFloat(engagementRate.toFixed(1));
+
+    if(newEngagement) {
+        await InfluencersSchema.findOneAndUpdate(
+            { usernameIG: influencer.username },
+            { $set: { engagement: newEngagement }},
+            { new: true }
+        );
+        savedCount++;
+        index++;
+        console.log(`✅ Row #${index} complete. Influencers Updated: ${savedCount} / Influencers Processed: ${index}`);
+    } else {
+        index++;
+    }
+    
+   }
+  }
+}
+
+const updateBioEmails = async(influencers) => {
+    let updatedCount = 0;
+    let index = 0;
+
+    for (let influencer of influencers) {
+      const influencerFound = await InfluencersSchema.findOne({usernameIG: influencer.username});
+  
+      if(influencerFound) {
+        if (!influencer.bioEmail) return; // Skip if bioEmail is empty
+
+        // Extract the first email if multiple exist
+        const firstEmail = influencer.bioEmail.split(',')[0].trim().toLowerCase();
+
+        // Convert existing emails to lowercase for comparison
+        const emailsLowerCase = influencerFound.emails.map(email => email.toLowerCase());
+    
+        // Check if email is valid and not already in the array
+        if (firstEmail && !emailsLowerCase.includes(firstEmail)) {
+            influencerFound.emails.push(firstEmail);
+
+            await InfluencersSchema.findOneAndUpdate(
+              { usernameIG: influencer.username },
+              { $set: { emails: influencerFound.emails }},
+              { new: true }
+            );
+
+            updatedCount++;
+            index++;
+            console.log(`✅ Row #${index} complete. Influencers Updated: ${updatedCount} / Influencers Processed: ${index}`);
+        }
+      } else {
+          index++;
+      }
+      
+    }
 }
 
 const getUsername = async(url) => {
@@ -301,189 +517,269 @@ const testImportFile = async(req, res, next) => {
     let category = csv.data.category;
     let influencerIndex = 0; // To track the loop iteration
     let savedCount = 0; // To count successfully saved influencers
+    const adminUser = await UserSchema.findOne({admin: true});
 
     if(category == 'Update DB') {
         await mapVerifiedEmailsToInfluencers(csv.data.data);
+    } else if(category == 'Update DB Emails') {
+        await mapGrowmanEmailsToInfluencers(csv.data.data, csv.data.category);
     } else if(category == 'Clean List') {
         const leads = await cleanLeadList(csv.data.data);
         res.json({ verifiedLeads: leads });
+    } else if(category == 'Pull Possible Emails') {
+        const pulledEmails = await pullPossibleEmailsFromDB();
+        res.json({ pulledEmails: pulledEmails });
+    } else if(category == 'Update Engagement Rates') {
+        await updateEngagementRates(csv.data.data);
+    } else if(category == 'Update Bio Emails') {
+        await updateBioEmails(csv.data.data);
     } else {
         const allPossibleEmails = [];
 
      for(let influencer of csv.data.data) {
-      if(!await InfluencersSchema.findOne({usernameIG: influencer.username}) && Number(influencer.followersCount) >= 1000) {
+      if(influencer.username != "" && (!await InfluencersSchema.findOne({usernameIG: influencer.username}) && !adminUser.influencersChecked.includes(influencer.username))) {
+        adminUser.influencersChecked.push(influencer.username);
+        adminUser.save();
 
-        const isCorrectInfluencerTypeData = await isCorrectInfluencerType(influencer.biography, influencer.fullName, category);
-        if (!isCorrectInfluencerTypeData || !Array.isArray(isCorrectInfluencerTypeData) || isCorrectInfluencerTypeData.length < 2) {
-            continue;
-        }
-        const isCorrectInfluencer = isCorrectInfluencerTypeData[0];
-
-        if(isCorrectInfluencer === true || isCorrectInfluencer  === 'true') {
+        //const chatGptData = await fetchInfleuncersDataFromChatGPT();
+        const isCorrectInfluencerTypeData = await isCorrectInfluencerType(influencer.biography, influencer.fullName, `${category} Coach`);
+        if(isCorrectInfluencerTypeData && isCorrectInfluencerTypeData !== false && isCorrectInfluencerTypeData !== 'false') {
+            console.log('isCorrectInfluencerType:', true)
             const isAvatarAPersonResult = await isAvatarAPerson(influencer.profilePicUrl);
             if(isAvatarAPersonResult === true || isAvatarAPersonResult === 'true') {
+                console.log('isCorrectAvatar:', true)
                 const influencerToAdd = {};
                 const emails = [];
                 const emailsSeen = [];
-                const emailsInBio = isCorrectInfluencerTypeData[1];
+                let emailsInBio = [];
+                if(influencer.bioEmail) {
+                    emailsInBio = influencer.bioEmail?.split(',')[0].trim().toLowerCase();
+                }
+                console.log('isEmailInBio:', emailsInBio);
 
                 influencerToAdd.category = `${category} Coach`;
-                let influencersRealName = await getInfluencersRealName(influencer.fullName, category, influencer.username, influencer.biography, influencer.externalUrl);
-                const linkType = influencer.externalUrl ? await identifyLinkType(influencer.externalUrl, influencersRealName, category) : null;
+                let influencersRealName = await getInfluencersRealName(influencer.fullName, influencerToAdd.category, influencer.username, influencer.biography, influencer.externalUrl);
+                if(influencersRealName !== null && influencersRealName !== 'null') {
+                    console.log('influencersRealName:', influencersRealName);
+
+                    const linkType = influencer.externalUrl ? await identifyLinkType(influencer.externalUrl, influencersRealName, influencerToAdd.category) : null;
                 
-                if(linkType !== null && linkType !== 'null') {
-                    const bioLinksFound = await scrapeBioLinkForMoreLinks(influencer.externalUrl);
-                    
-                    if(String(linkType) === 'MINI-SITE') {
-                        const getInfuencersWebsiteDomain = await scrapeForInfluencersWebsiteDomain(bioLinksFound, influencersRealName, category);
-                        if(getInfuencersWebsiteDomain !== 'null' && getInfuencersWebsiteDomain !== null) {
-                            influencerToAdd.domain = String(getInfuencersWebsiteDomain).replace(/^["']|["']$/g, '');
-                        }
-                    } else if(String(linkType) === 'BUSINESS-SITE') {
-                        influencerToAdd.domain = String(influencer.externalUrl).replace(/^["']|["']$/g, '');
-                    }
-                } else {
-                    influencerToAdd.domain = null;
-                }
-
-                influencerToAdd.usernameIG = influencer.username;
-                influencerToAdd.firstName = influencersRealName.split(' ')[0];
-                influencerToAdd.lastName = influencersRealName.split(' ')[1] || null;
-                influencerToAdd.profileUrlIG = influencer.inputUrl;
-                influencerToAdd.followersIG = formatNumberToSuffix(Number(influencer.followersCount));
-                influencerToAdd.followersIGNum = Number(influencer.followersCount); //convertToNumber(String(followersIG)) || 0;
-
-                if (influencerToAdd.domain && influencerToAdd.firstName) {
-                    const cleanDomain = String(influencerToAdd.domain).replace(/^["']|["']$/g, ''); // Removes leading/trailing quotes
-                    const match = cleanDomain.match(/:\/\/(?:www\.)?([^/]+)/);
-                    const domainEmail = match ? match[1] : null;
-
-                    if (domainEmail) {
-                        const possibleEmail = `${influencerToAdd.firstName.toLowerCase()}@${domainEmail}`;
-                        influencerToAdd.possibleEmails = [possibleEmail];
-                        // Check if lastName is present and add more variations
-                        if (influencerToAdd.lastName) {
-                            const firstNameLower = influencerToAdd.firstName.toLowerCase();
-                            const lastNameLower = influencerToAdd.lastName.toLowerCase();
-
-                            // Add variations to the possibleEmails array
-                            influencerToAdd.possibleEmails.push(`${firstNameLower}${lastNameLower}@${domainEmail}`);  // firstname + lastname
-                            influencerToAdd.possibleEmails.push(`${firstNameLower}.${lastNameLower}@${domainEmail}`);  // firstname.lastName
-                            influencerToAdd.possibleEmails.push(`${firstNameLower.charAt(0)}${lastNameLower}@${domainEmail}`);  // first initial + lastname
-                        }
-                        allPossibleEmails.push(possibleEmail);
-                    }
-
-                    if(emailsInBio.length) {
-                        emailsInBio.forEach((email) => {
-                            if(!emailsSeen.includes(email)) {
-                                emails.push(String(email).replace(/^["']|["']$/g, ''));
-                                emailsSeen.push(String(email).replace(/^["']|["']$/g, ''));
+                    if(linkType && linkType != null && linkType != "null") {
+                        console.log('linkType:', linkType);
+                        console.log('SCRAPING LINK FOR MORE LINKS............')
+                        const bioLinksFound = await scrapeBioLinkForMoreLinks(influencer.externalUrl);
+                        console.log('moreLinksFound:', bioLinksFound)
+                        if(bioLinksFound && Array.isArray(bioLinksFound) && bioLinksFound?.length) {
+                            const emailInLinks = bioLinksFound.filter(link => link.startsWith("mailto:")).map(link => link.replace("mailto:", ""));
+                            if(emailInLinks && Array.isArray(emailInLinks) && emailInLinks?.length) {
+                                emailInLinks.forEach((email) => {
+                                    if(!emailsSeen.includes(email)) {
+                                        emails.push(String(email).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase());
+                                        emailsSeen.push(String(email).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase());
+                                    }
+                                });
                             }
-                        });
-                    }
+                        }
                     
-                    influencerToAdd.emails = emails;
-                    //influencerToAdd.profileUrlFacebook = hunterIoData?.data?.facebook;
-                    //influencerToAdd.profileUrlX = hunterIoData?.data?.twitter;
-                    //influencerToAdd.profileUrlYoutube = hunterIoData?.data?.youtube;
-                    //influencerToAdd.profileUrlLinkedIn = hunterIoData?.data?.linkedin;
-                } else {
-                    influencerToAdd.emails = [];
-                }
-
-                if (influencer.profilePicUrl) {
-                    try {
-                        const cloudinaryImg = await cloudinary.uploader.upload(influencer.profilePicUrl);
-                        influencerToAdd.profilePic = cloudinaryImg;
-                    } catch (error) {
-                        console.error('Error uploading profile picture:', error);
+                        if(String(linkType) === 'MINI-SITE' && bioLinksFound?.length) {
+                            const getInfuencersWebsiteDomain = await scrapeForInfluencersWebsiteDomain(bioLinksFound, influencersRealName, influencerToAdd.category);
+                            if(getInfuencersWebsiteDomain !== 'null' && getInfuencersWebsiteDomain !== null) {
+                                influencerToAdd.domain = String(getInfuencersWebsiteDomain).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase();
+                            }
+                        } else if(String(linkType) === 'BUSINESS-SITE') {
+                            influencerToAdd.domain = String(influencer.externalUrl).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase();
+                        }
+                    } else {        
+                        influencerToAdd.domain = null;
                     }
-                } else {
-                    console.log('No profile picture URL provided');
-                }
+                    console.log('domain:', influencerToAdd.domain);
 
-                influencerToAdd.followersTotal = influencerToAdd.followersIG;
-                influencerToAdd.followersTotalNum = influencerToAdd.followersIGNum;
+                    influencerToAdd.usernameIG = influencer.username;
 
-                //CALCULATE INFLUENCERS ENGAGEMENT RATE (last 10 posts)
-                const latestPost0CommentsCount = Number(influencer['latestPosts/0/commentsCount']) || 0;
-                const latestPost0LikesCount = Number(influencer['latestPosts/0/likesCount']) || 0;
-                //const latestPost0VideoView = Number(influencer['latestPosts/0/videoViewCount']) || 0;
-                const totalPost0 = (latestPost0CommentsCount + latestPost0LikesCount);
+                    const nameParts = influencersRealName?.trim()?.split(/\s+/);
+                    influencerToAdd.firstName = nameParts[0] || "";
 
-                const latestPost1CommentsCount = Number(influencer['latestPosts/1/commentsCount']) || 0;
-                const latestPost1LikesCount = Number(influencer['latestPosts/1/likesCount']) || 0;
-                //const latestPost1VideoView = Number(influencer['latestPosts/1/videoViewCount']) || 0;
-                const totalPost1 = (latestPost1CommentsCount + latestPost1LikesCount);
+                    const lastNamePrefixes = ["o'", "o", "da", "de", "st", "st.", "di", "del"];
+                    const isPrefix = lastNamePrefixes.includes(nameParts[1]?.toLowerCase());
+                    const fullLastName = isPrefix && nameParts.length > 2
+                        ? nameParts.slice(1).join(" ") // Join all remaining parts for correct last name
+                        : !isPrefix && nameParts.length > 2 
+                        ? nameParts[2]
+                        : nameParts[1] || null; // Use just the second part if no prefix
+                    influencerToAdd.lastName = fullLastName;
+                    
+                    influencerToAdd.fullName = fullLastName 
+                        ? `${influencerToAdd.firstName} ${fullLastName}` 
+                        : influencerToAdd.firstName;
+                        
+                    influencerToAdd.profileUrlIG = influencer.inputUrl;
+                    influencerToAdd.followersIG = formatNumberToSuffix(Number(influencer.followersCount));
+                    influencerToAdd.followersIGNum = Number(influencer.followersCount); //convertToNumber(String(followersIG)) || 0;
 
-                const latestPost2CommentsCount = Number(influencer['latestPosts/2/commentsCount']) || 0;
-                const latestPost2LikesCount = Number(influencer['latestPosts/2/likesCount']) || 0;
-                //const latestPost2VideoView = Number(influencer['latestPosts/2/videoViewCount']) || 0;
-                const totalPost2 = (latestPost2CommentsCount + latestPost2LikesCount);
+                    if (influencerToAdd.domain && influencerToAdd.firstName) {
+                        const cleanDomain = String(influencerToAdd.domain).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase(); // Removes leading/trailing quotes
+                        const match = cleanDomain.match(/:\/\/(?:www\.)?([^/]+)/);
+                        const domainEmail = match ? match[1] : null;
 
-                const latestPost3CommentsCount = Number(influencer['latestPosts/3/commentsCount']) || 0;
-                const latestPost3LikesCount = Number(influencer['latestPosts/3/likesCount']) || 0;
-                //const latestPost3VideoView = Number(influencer['latestPosts/3/videoViewCount']) || 0;
-                const totalPost3 = (latestPost3CommentsCount + latestPost3LikesCount);
+                        if (domainEmail) {
+                            console.log('PUSHING POSSIBLE EMAILS...........')
+                            const possibleEmail = `${influencerToAdd.firstName.toLowerCase()}@${domainEmail}`;
+                            influencerToAdd.possibleEmails = [possibleEmail];
+                            // Check if lastName is present and add more variations
+                            if (influencerToAdd.lastName) {
+                                const firstNameLower = influencerToAdd.firstName.toLowerCase();
+                                const lastNameLower = influencerToAdd.lastName.toLowerCase();
+                                const formattedLastName = lastNameLower?.replace(/\s+/g, "");
+                               
+                                // Add variations to the possibleEmails array
+                                influencerToAdd.possibleEmails.push(`${firstNameLower}${formattedLastName}@${domainEmail}`);  // firstname + lastname
+                                influencerToAdd.possibleEmails.push(`${firstNameLower}.${formattedLastName}@${domainEmail}`);  // firstname.lastName
+                                influencerToAdd.possibleEmails.push(`${firstNameLower.charAt(0)}${formattedLastName}@${domainEmail}`);  // first initial + lastname
+                            }
+                            allPossibleEmails.push(possibleEmail);
+                        }
 
-                const latestPost4CommentsCount = Number(influencer['latestPosts/4/commentsCount']) || 0;
-                const latestPost4LikesCount = Number(influencer['latestPosts/4/likesCount']) || 0;
-                //const latestPost4VideoView = Number(influencer['latestPosts/4/videoViewCount']) || 0;
-                const totalPost4 = (latestPost4CommentsCount + latestPost4LikesCount);
+                        let emailsInBioFound;
+                        if (Array.isArray(emailsInBio)) {
+                            // If it's already an array, just assign it directly
+                            emailsInBioFound = emailsInBio;
+                        } else if (typeof emailsInBio === "string") {
+                            // Check if the string looks like a JSON array
+                            try {
+                                // Remove quotes from the string and parse it
+                                emailsInBioFound = JSON.parse(emailsInBio);
+                            } catch (error) {
+                                console.error("Error parsing emailsInBio:", error);
+                                emailsInBioFound = []; // Default to an empty array if parsing fails
+                            }
+                        } else {
+                            emailsInBioFound = []; // Default to empty array if it's neither an array nor a valid string
+                        }
 
-                const latestPost5CommentsCount = Number(influencer['latestPosts/5/commentsCount']) || 0;
-                const latestPost5LikesCount = Number(influencer['latestPosts/5/likesCount']) || 0;
-                //const latestPost5VideoView = Number(influencer['latestPosts/5/videoViewCount']) || 0;
-                const totalPost5 = (latestPost5CommentsCount + latestPost5LikesCount);
-
-                const latestPost6CommentsCount = Number(influencer['latestPosts/6/commentsCount']) || 0;
-                const latestPost6LikesCount = Number(influencer['latestPosts/6/likesCount']) || 0;
-                //const latestPost6VideoView = Number(influencer['latestPosts/6/videoViewCount']) || 0;
-                const totalPost6 = (latestPost6CommentsCount + latestPost6LikesCount);
-
-                const latestPost7CommentsCount = Number(influencer['latestPosts/7/commentsCount']) || 0;
-                const latestPost7LikesCount = Number(influencer['latestPosts/7/likesCount']) || 0;
-                //const latestPost7VideoView = Number(influencer['latestPosts/7/videoViewCount']) || 0;
-                const totalPost7 = (latestPost7CommentsCount + latestPost7LikesCount);
-
-                const latestPost8CommentsCount = Number(influencer['latestPosts/8/commentsCount']) || 0;
-                const latestPost8LikesCount = Number(influencer['latestPosts/8/likesCount']) || 0;
-                //const latestPost8VideoView = Number(influencer['latestPosts/8/videoViewCount']) || 0;
-                const totalPost8 = (latestPost8CommentsCount + latestPost8LikesCount);
-
-                const latestPost9CommentsCount = Number(influencer['latestPosts/9/commentsCount']) || 0;
-                const latestPost9LikesCount = Number(influencer['latestPosts/9/likesCount']) || 0;
-                //const latestPost9VideoView = Number(influencer['latestPosts/9/videoViewCount']) || 0;
-                const totalPost9 = (latestPost9CommentsCount + latestPost9LikesCount);
-
-                const latestPost10CommentsCount = Number(influencer['latestPosts/10/commentsCount']) || 0;
-                const latestPost10LikesCount = Number(influencer['latestPosts/10/likesCount']) || 0;
-                //const latestPost10VideoView = Number(influencer['latestPosts/10/videoViewCount']) || 0;
-                const totalPost10 = (latestPost10CommentsCount + latestPost10LikesCount);
-
-                const totalEngagement = 
-                    (totalPost0 + totalPost1 + totalPost2 + totalPost3 + totalPost4 + totalPost5 +
-                     totalPost6 + totalPost7 + totalPost8 + totalPost9 + totalPost10);
-
-                const engagementRate = (totalEngagement / influencerToAdd.followersIGNum) * 100;
-                influencerToAdd.engagement = parseFloat(engagementRate.toFixed(1));
-
-                influencerToAdd.platform = influencer.platform;
-                influencerToAdd.city = influencer.city;
-                influencerToAdd.state = influencer.state;
-                influencerToAdd.country = influencer.country;
-
-                influencerToAdd.updatedDate = new Date().toLocaleString();
-                if (areAllRowsValid(influencerToAdd)) {
-                    try {
-                        await InfluencersSchema.create(influencerToAdd);
-                        savedCount++; // Increment the saved count
-                    } catch (error) {
-                        console.error('Error saving influencer:', error);
+                        if(emailsInBioFound !== null && emailsInBioFound !== 'null' && Array.isArray(emailsInBioFound) && emailsInBioFound?.length) {
+                            emailsInBioFound.forEach((email) => {
+                                if(!emailsSeen.includes(email)) {
+                                    emails.push(String(email).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase());
+                                    emailsSeen.push(String(email).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase());
+                                }
+                            });
+                        }
+                    
+                        influencerToAdd.emails = emails;
+                        //influencerToAdd.profileUrlFacebook = hunterIoData?.data?.facebook;
+                        //influencerToAdd.profileUrlX = hunterIoData?.data?.twitter;
+                        //influencerToAdd.profileUrlYoutube = hunterIoData?.data?.youtube;
+                        //influencerToAdd.profileUrlLinkedIn = hunterIoData?.data?.linkedin;
+                    } else {
+                        influencerToAdd.emails = [];
                     }
-                } else {
-                    console.log('Invalid influencer data, skipping save');
+
+                    if (influencer.profilePicUrl) {
+                        try {
+                            console.log('EXPORTING PROFILE PIC TO CLOUDINARY...................................')
+                            const cloudinaryImg = await cloudinary.uploader.upload(influencer.profilePicUrl);
+                            influencerToAdd.profilePic = cloudinaryImg;
+                        } catch (error) {
+                            console.error('Error uploading profile picture:', error);
+                        }
+                    } else {
+                        console.log('No profile picture URL provided');
+                    }
+
+                    influencerToAdd.followersTotal = influencerToAdd.followersIG;
+                    influencerToAdd.followersTotalNum = influencerToAdd.followersIGNum;
+
+                    //CALCULATE INFLUENCERS ENGAGEMENT RATE (last 10 posts)
+                    const latestPost0CommentsCount = Number(influencer['latestPosts/0/commentsCount']) || 0;
+                    const latestPost0LikesCount = Number(influencer['latestPosts/0/likesCount']) || 0;
+                    //const latestPost0VideoView = Number(influencer['latestPosts/0/videoViewCount']) || 0;
+                    const totalPost0 = (latestPost0CommentsCount + latestPost0LikesCount);
+
+                    const latestPost1CommentsCount = Number(influencer['latestPosts/1/commentsCount']) || 0;
+                    const latestPost1LikesCount = Number(influencer['latestPosts/1/likesCount']) || 0;
+                    //const latestPost1VideoView = Number(influencer['latestPosts/1/videoViewCount']) || 0;
+                    const totalPost1 = (latestPost1CommentsCount + latestPost1LikesCount);
+
+                    const latestPost2CommentsCount = Number(influencer['latestPosts/2/commentsCount']) || 0;
+                    const latestPost2LikesCount = Number(influencer['latestPosts/2/likesCount']) || 0;
+                    //const latestPost2VideoView = Number(influencer['latestPosts/2/videoViewCount']) || 0;
+                    const totalPost2 = (latestPost2CommentsCount + latestPost2LikesCount);
+
+                    const latestPost3CommentsCount = Number(influencer['latestPosts/3/commentsCount']) || 0;
+                    const latestPost3LikesCount = Number(influencer['latestPosts/3/likesCount']) || 0;
+                    //const latestPost3VideoView = Number(influencer['latestPosts/3/videoViewCount']) || 0;
+                    const totalPost3 = (latestPost3CommentsCount + latestPost3LikesCount);
+
+                    const latestPost4CommentsCount = Number(influencer['latestPosts/4/commentsCount']) || 0;
+                    const latestPost4LikesCount = Number(influencer['latestPosts/4/likesCount']) || 0;
+                    //const latestPost4VideoView = Number(influencer['latestPosts/4/videoViewCount']) || 0;
+                    const totalPost4 = (latestPost4CommentsCount + latestPost4LikesCount);
+
+                    const latestPost5CommentsCount = Number(influencer['latestPosts/5/commentsCount']) || 0;
+                    const latestPost5LikesCount = Number(influencer['latestPosts/5/likesCount']) || 0;
+                    //const latestPost5VideoView = Number(influencer['latestPosts/5/videoViewCount']) || 0;
+                    const totalPost5 = (latestPost5CommentsCount + latestPost5LikesCount);
+
+                    const latestPost6CommentsCount = Number(influencer['latestPosts/6/commentsCount']) || 0;
+                    const latestPost6LikesCount = Number(influencer['latestPosts/6/likesCount']) || 0;
+                    //const latestPost6VideoView = Number(influencer['latestPosts/6/videoViewCount']) || 0;
+                    const totalPost6 = (latestPost6CommentsCount + latestPost6LikesCount);
+
+                    const latestPost7CommentsCount = Number(influencer['latestPosts/7/commentsCount']) || 0;
+                    const latestPost7LikesCount = Number(influencer['latestPosts/7/likesCount']) || 0;
+                    //const latestPost7VideoView = Number(influencer['latestPosts/7/videoViewCount']) || 0;
+                    const totalPost7 = (latestPost7CommentsCount + latestPost7LikesCount);
+
+                    const latestPost8CommentsCount = Number(influencer['latestPosts/8/commentsCount']) || 0;
+                    const latestPost8LikesCount = Number(influencer['latestPosts/8/likesCount']) || 0;
+                    //const latestPost8VideoView = Number(influencer['latestPosts/8/videoViewCount']) || 0;
+                    const totalPost8 = (latestPost8CommentsCount + latestPost8LikesCount);
+
+                    const latestPost9CommentsCount = Number(influencer['latestPosts/9/commentsCount']) || 0;
+                    const latestPost9LikesCount = Number(influencer['latestPosts/9/likesCount']) || 0;
+                    //const latestPost9VideoView = Number(influencer['latestPosts/9/videoViewCount']) || 0;
+                    const totalPost9 = (latestPost9CommentsCount + latestPost9LikesCount);
+
+                    const latestPost10CommentsCount = Number(influencer['latestPosts/10/commentsCount']) || 0;
+                    const latestPost10LikesCount = Number(influencer['latestPosts/10/likesCount']) || 0;
+                    //const latestPost10VideoView = Number(influencer['latestPosts/10/videoViewCount']) || 0;
+                    const totalPost10 = (latestPost10CommentsCount + latestPost10LikesCount);
+
+                    const latestPost11CommentsCount = Number(influencer['latestPosts/11/commentsCount']) || 0;
+                    const latestPost11LikesCount = Number(influencer['latestPosts/11/likesCount']) || 0;
+                    //const latestPost11VideoView = Number(influencer['latestPosts/11/videoViewCount']) || 0;
+                    const totalPost11 = (latestPost11CommentsCount + latestPost11LikesCount);
+
+                    const totalEngagement = [
+                        totalPost0 || 0, totalPost1 || 0, totalPost2 || 0, totalPost3 || 0, totalPost4 || 0, 
+                        totalPost5 || 0, totalPost6 || 0, totalPost7 || 0, totalPost8 || 0, totalPost9 || 0, 
+                        totalPost10 || 0, totalPost11 || 0
+                    ];
+
+                    const medianEngagement = getMedianEngagement(totalEngagement);
+
+                    const engagementRate = (medianEngagement / Number(influencerToAdd.followersIGNum)) * 100;
+                    influencerToAdd.engagement = parseFloat(engagementRate.toFixed(1));
+
+                    influencerToAdd.platform = influencer.platform;
+                    influencerToAdd.city = influencer.city;
+                    influencerToAdd.state = influencer.state;
+                    influencerToAdd.country = influencer.country;
+
+                    influencerToAdd.updatedDate = new Date().toLocaleString();
+                    console.log('FINAL VALIDATION.......')
+                    if (areAllRowsValid(influencerToAdd)) {
+                        console.log('SAVING!!!!!!!!!!!!!!!!!!')
+                        try {
+                            await InfluencersSchema.create(influencerToAdd);
+                            savedCount++; // Increment the saved count
+                        } catch (error) {
+                            console.error('Error saving influencer:', error);
+                        }
+                    } else {
+                        console.log('NOT ALL ROWS WERE VALID :( ..................')
+                        console.log('Invalid influencer data, skipping save');
+                    }
                 }
             }
         }
@@ -497,6 +793,68 @@ const testImportFile = async(req, res, next) => {
     }
 }
 
+const getMedianEngagement = (posts) => {
+    // Step 1: Filter out posts with a value of 0
+    const filteredPosts = posts.filter(post => post > 0);
+
+    // If no valid posts remain, return 0 to prevent errors
+    if (filteredPosts.length === 0) return 0;
+
+    // Step 2: Sort the array in ascending order
+    const sortedPosts = filteredPosts.slice().sort((a, b) => a - b);
+    const mid = Math.floor(sortedPosts.length / 2);
+
+    // Step 3: Calculate median
+    if (sortedPosts.length % 2 === 0) {
+        return (sortedPosts[mid - 1] + sortedPosts[mid]) / 2;
+    } else {
+        return sortedPosts[mid];
+    }
+};
+
+const mapGrowmanEmailsToInfluencers2 = async (influencers) => {
+    for (const influencer of influencers) {
+        const growmanEmails = influencer['Public email']?.split(',').map(email => email.trim()) || []; // Split and trim emails
+        const influencerFound = await InfluencersSchema.findOne({ usernameIG: influencer['Username'] });
+
+        if (influencerFound) {
+            if (!influencerFound.fullName) {
+                influencerFound.fullName = influencerFound.firstName 
+                    ? influencerFound.lastName 
+                        ? `${influencerFound.firstName} ${influencerFound.lastName}` 
+                        : influencerFound.firstName 
+                    : null;
+            }
+
+            for (const email of growmanEmails) {
+                if (email && !influencerFound.emails?.some(existingEmail => existingEmail.toLowerCase() === email.toLowerCase())) {
+                    influencerFound.emails.push(email);
+                    console.log(`✅ Added verified email ${email} to ${influencerFound.usernameIG}`);
+                }
+            }
+
+            // Save only if new emails were added
+            if (growmanEmails.length > 0) {
+                await influencerFound.save();
+            }
+        }
+    }
+};
+
+const mapGrowmanEmailsToInfluencers = async (influencers, category) => {
+    const adminUser = await UserSchema.findOne({admin: true});
+    let i = 0;
+
+    for (const influencer of influencers) {
+        if(influencer.username && (!await InfluencersSchema.findOne({usernameIG: influencer.username}) && (!adminUser.influencersChecked.includes(influencer.username)))) {
+            adminUser.influencersChecked.push(influencer.username);
+        }
+        i++;
+        console.log(i)
+    }
+    adminUser.save();
+};
+
 const mapVerifiedEmailsToInfluencers = async (emails) => {
     for (const email of emails) {
         const snovEmail = email.Email;
@@ -506,7 +864,7 @@ const mapVerifiedEmailsToInfluencers = async (emails) => {
         if (influencer) {
             if (emailStatus == "valid") {
                 // 3️⃣ Check if email already exists in the "emails" array
-                if (!influencer.emails.includes(snovEmail)) {
+                if (!influencer.emails?.some(email => email.toLowerCase() == snovEmail.toLowerCase())) {
                     influencer.emails.push(snovEmail);
 
                     // 4️⃣ Save the updated document
@@ -529,6 +887,39 @@ const mapVerifiedEmailsToInfluencers = async (emails) => {
         }
     }
 }
+
+const pullPossibleEmailsFromDB = async () => {
+    const influencers = await InfluencersSchema.find({});
+    const possibleEmails = [];
+
+    for (let influencer of influencers) {
+        if (!influencer?.possibleEmails?.length) continue;
+
+        const primaryPossibleEmail = influencer.possibleEmails[0];
+        const domain = primaryPossibleEmail.split("@")[1];
+
+        // Check if any emails in influencer.emails exist in influencer.possibleEmails
+        const matches = influencer.emails?.filter(email => 
+            influencer.possibleEmails.some(possibleEmail => possibleEmail.toLowerCase() === email.toLowerCase())
+        ) || [];
+
+        if (matches.length > 0) {
+            // If it's a non-business email or has matches, update DB with modified possibleEmails or clear it
+            await InfluencersSchema.findByIdAndUpdate(influencer._id, {
+                $set: { possibleEmails: [] }
+            });
+        } else {
+            possibleEmails.push(primaryPossibleEmail);
+                
+            influencer.possibleEmails = influencer.possibleEmails.filter(email => email != primaryPossibleEmail);
+            await InfluencersSchema.findByIdAndUpdate(influencer._id, {
+                $set: { possibleEmails: influencer.possibleEmails }
+            });
+        }
+    }
+
+    return possibleEmails;
+};
 
 const cleanLeadList = async (leads) => {
     const verifiedLeads = [];

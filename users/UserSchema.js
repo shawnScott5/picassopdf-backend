@@ -78,6 +78,10 @@ const UserSchema = new mongoose.Schema({
         type: Array,
         default: []
     },
+    influencersChecked: {
+        type: Array,
+        default: []
+    },
     influencersEmailViewedCount: {
         type: Number,
         default: 0
