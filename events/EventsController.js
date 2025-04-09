@@ -104,7 +104,7 @@ const createEvent = async(req, res, next) => {
             name: form.name,
             startDate: form.startDate,
             startTime: form.startTime,
-            endate: form.endDate,
+            endDate: form.endDate,
             endTime: form.endTime,
             isEndDate: form.endDate ? true : false
         }

@@ -241,11 +241,12 @@ const deleteCampaign = async(req, res, next) => {
 
 const createCampaign = async(req, res, next) => {
     const form = req.body;
-    const client = await InfluencersSchema.findOne({name: form.clientName.trim()});
+    const client = await InfluencersSchema.findOne({name: form.clientName?.trim()});
         const newCampaign = {
             createdDate: new Date().toLocaleString(),
             userId: form.userId,
-            clientName: form.clientName.trim(),
+            name: form.name?.trim(),
+            clientName: form.clientName?.trim(),
             profilePic: client ? client.profilePic : '',
             compensation: form.compensation,
             compensationDuration: form.compensationDuration,

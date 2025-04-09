@@ -6,13 +6,13 @@ const createNewTask = async(req, res, next) => {
     const newTask = {
         createdDate: new Date().toLocaleString(),
         userId: form.userId,
-        title: form.name.trim(),
+        title: form.title.trim(),
         description: form.description,
         priority: form.priority,
         dueDate: form.dueDate,
         recurring: form.recurring === 'Yes' ? true : false,
         reminder: form.reminder,
-        dueDateTime: form.time,
+        dueDateTime: form.dueDateTime,
         flagged: form.flagged,
         status: form.status
     }

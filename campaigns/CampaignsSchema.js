@@ -7,6 +7,9 @@ const CampaignSchema = new mongoose.Schema({
     profilePic: {
         type: Object
     },
+    name: {
+        type: String
+    },
     clientName: {
         type: String
     },
