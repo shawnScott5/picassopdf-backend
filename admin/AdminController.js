@@ -506,6 +506,13 @@ const updateBioEmails = async(influencers) => {
     }
 }
 
+const removeDuplicateGrowmanInfluencersForApify = async(req, res,) => {
+    const csv = req.body;
+    const newList = [];
+
+    return newList;
+}
+
 const getUsername = async(url) => {
     const urlObj = new URL(url); // Create a URL object
     const parts = urlObj.pathname.split("/").filter(Boolean); // Get path parts
@@ -570,7 +577,7 @@ const testImportFile = async(req, res, next) => {
                         const bioLinksFound = await scrapeBioLinkForMoreLinks(influencer.externalUrl);
                         console.log('moreLinksFound:', bioLinksFound)
                         if(bioLinksFound && Array.isArray(bioLinksFound) && bioLinksFound?.length) {
-                            const emailInLinks = bioLinksFound.filter(link => link.startsWith("mailto:")).map(link => link.replace("mailto:", ""));
+                            const emailInLinks = bioLinksFound?.filter(link => link?.startsWith("mailto:")).map(link => link?.replace("mailto:", ""));
                             if(emailInLinks && Array.isArray(emailInLinks) && emailInLinks?.length) {
                                 emailInLinks.forEach((email) => {
                                     if(!emailsSeen.includes(email)) {
@@ -866,6 +873,8 @@ const mapVerifiedEmailsToInfluencers = async (emails) => {
                 // 3️⃣ Check if email already exists in the "emails" array
                 if (!influencer.emails?.some(email => email.toLowerCase() == snovEmail.toLowerCase())) {
                     influencer.emails.push(snovEmail);
+                    
+                    influencer.possibleEmails = influencer.possibleEmails?.filter(email => email.toLowerCase() != snovEmail.toLowerCase());
 
                     // 4️⃣ Save the updated document
                     await influencer.save();
@@ -875,9 +884,10 @@ const mapVerifiedEmailsToInfluencers = async (emails) => {
                 }
             } else {
                 // 5️⃣ Remove the email from the "possibleEmails" array if the status is not valid
-                const emailIndex = influencer.possibleEmails.indexOf(snovEmail);
-                if (emailIndex > -1) {
-                    influencer.possibleEmails.splice(emailIndex, 1);
+                if(influencer.possibleEmails?.some(email => email.toLowerCase() == snovEmail.toLowerCase())) {
+                    influencer.possibleEmails = influencer.possibleEmails?.filter(email => email.toLowerCase() != snovEmail.toLowerCase());
+
+                    // 4️⃣ Save the updated document
                     await influencer.save();
                     console.log(`❌ Removed invalid email ${snovEmail} from ${influencer.usernameIG}'s possibleEmails`);
                 }
@@ -896,7 +906,7 @@ const pullPossibleEmailsFromDB = async () => {
         if (!influencer?.possibleEmails?.length) continue;
 
         const primaryPossibleEmail = influencer.possibleEmails[0];
-        const domain = primaryPossibleEmail.split("@")[1];
+        //const domain = primaryPossibleEmail.split("@")[1];
 
         // Check if any emails in influencer.emails exist in influencer.possibleEmails
         const matches = influencer.emails?.filter(email => 
@@ -904,17 +914,12 @@ const pullPossibleEmailsFromDB = async () => {
         ) || [];
 
         if (matches.length > 0) {
-            // If it's a non-business email or has matches, update DB with modified possibleEmails or clear it
+            // If there is a match, update DB with modified possibleEmails/clear it
             await InfluencersSchema.findByIdAndUpdate(influencer._id, {
                 $set: { possibleEmails: [] }
             });
         } else {
             possibleEmails.push(primaryPossibleEmail);
-                
-            influencer.possibleEmails = influencer.possibleEmails.filter(email => email != primaryPossibleEmail);
-            await InfluencersSchema.findByIdAndUpdate(influencer._id, {
-                $set: { possibleEmails: influencer.possibleEmails }
-            });
         }
     }
 

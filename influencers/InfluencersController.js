@@ -19,7 +19,7 @@ const fetchAllInfluencers = async(req, res, next) => {
         query.$and.push({ category: filter.category });
     }
     if(filter.keywordSearch) {
-        query.$and.push({ name: { $regex: filter.keywordSearch, $options: 'i' } }); // Case-insensitive keyword search
+        query.$and.push({ fullName: { $regex: filter.keywordSearch, $options: 'i' } }); // Case-insensitive keyword search
     }
     
     if(filter.excludesInfluencersInLists === 'true' || filter.excludesInfluencersInLists === true) {
@@ -36,10 +36,12 @@ const fetchAllInfluencers = async(req, res, next) => {
     }
     
     try {
+        console.log(query.$and)
         const influencers = await InfluencersSchema.find(query)
         //.sort(sorting)
         .skip((filter && filter.page) ? parseInt(filter.limit) * (parseInt(filter.page) - 1) : 0)
-        .limit(parseInt(filter.limit));
+        .limit(parseInt(filter.limit))
+        .sort({ 'firstName': 1 });
     
         if(influencers?.length) {
             return res.status(200).json({
