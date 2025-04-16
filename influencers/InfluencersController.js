@@ -41,7 +41,7 @@ const fetchAllInfluencers = async(req, res, next) => {
         //.sort(sorting)
         .skip((filter && filter.page) ? parseInt(filter.limit) * (parseInt(filter.page) - 1) : 0)
         .limit(parseInt(filter.limit))
-        .sort({ 'firstName': 1 });
+        .sort({ 'fullName': 1, 'usernameIG': 1 });
     
         if(influencers?.length) {
             return res.status(200).json({
