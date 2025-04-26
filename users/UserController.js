@@ -124,7 +124,7 @@ const me = async(req, res, next) => {
     
     if(user) {
         // This block only triggers after a user backs out of stripe subscription page (this is a bug workout)
-        if(user.subscription.type != 'FREE' && !user.stripeSubscriptionId) {
+        if(user.subscription.type != 'FREE') {
             if(user.stripeSessionId) {
                 const session = await stripe.checkout.sessions.retrieve(user.stripeSessionId);
         
@@ -132,7 +132,12 @@ const me = async(req, res, next) => {
                 const subscriptionId = session.subscription;
         
                 if (!subscriptionId) {
-                  await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': 'FREE', stripeSessionId: '', stripeSubscriptionId: '', nextPaymentDate: user.previousPaymentDate, subscriptionStartDate: user.previousSubscriptionStartDate }}, { new: true });
+                  if(user.stripeSubscriptionId) {
+                    const subscriptionType = user.subscription.type == 'PRO' ? 'SCALE' : 'PRO';
+                    await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': subscriptionType, stripeSessionId: '', stripeSubscriptionId: '', nextPaymentDate: user.previousPaymentDate, subscriptionStartDate: user.previousSubscriptionStartDate }}, { new: true });
+                  } else {
+                    await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': 'FREE', stripeSessionId: '', stripeSubscriptionId: '', nextPaymentDate: user.previousPaymentDate, subscriptionStartDate: user.previousSubscriptionStartDate }}, { new: true });
+                  }
                 } else {
                     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
                     if(subscription) {
@@ -140,7 +145,12 @@ const me = async(req, res, next) => {
                     }
                 }
             } else {
-                await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': 'FREE', stripeSessionId: '', stripeSubscriptionId: '', nextPaymentDate: user.previousPaymentDate, subscriptionStartDate: user.previousSubscriptionStartDate  }}, { new: true });
+                if(user.stripeSubscriptionId) {
+                    const subscriptionType = user.subscription.type == 'PRO' ? 'SCALE' : 'PRO';
+                    await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': subscriptionType, stripeSessionId: '', stripeSubscriptionId: '', nextPaymentDate: user.previousPaymentDate, subscriptionStartDate: user.previousSubscriptionStartDate }}, { new: true });
+                } else {
+                    await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': 'FREE', stripeSessionId: '', stripeSubscriptionId: '', nextPaymentDate: user.previousPaymentDate, subscriptionStartDate: user.previousSubscriptionStartDate }}, { new: true });
+                }
             }
         }
 
