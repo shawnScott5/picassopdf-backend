@@ -134,14 +134,14 @@ const me = async(req, res, next) => {
                 if (!subscriptionId) {
                   if(user.stripeSubscriptionId) {
                     const subscriptionType = user.subscription.type == 'PRO' ? 'SCALE' : 'PRO';
-                    await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': subscriptionType, nextPaymentDate: user.previousPaymentDate, subscriptionStartDate: user.previousSubscriptionStartDate }}, { new: true });
+                    await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { stripeSessionId: '', 'subscription.type': subscriptionType, nextPaymentDate: user.previousPaymentDate, subscriptionStartDate: user.previousSubscriptionStartDate }}, { new: true });
                   } else {
                     await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': 'FREE', stripeSessionId: '', stripeSubscriptionId: '', nextPaymentDate: user.previousPaymentDate, subscriptionStartDate: user.previousSubscriptionStartDate }}, { new: true });
                   }
                 } else {
                     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
                     if(subscription) {
-                        await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { stripeSubscriptionId: subscriptionId, previousPaymentDate: user.nextPaymentDate, previousSubscriptionStartDate: user.subscriptionStartDate }}, { new: true });
+                        await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { stripeSessionId: '', stripeSubscriptionId: subscriptionId, previousPaymentDate: user.nextPaymentDate, previousSubscriptionStartDate: user.subscriptionStartDate }}, { new: true });
                     }
                 }
             }
