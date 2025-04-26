@@ -57,6 +57,10 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    previousPaymentDate: {
+        type: String,
+        required: true
+    },
     nextPaymentDate: {
         type: String,
         required: true
@@ -66,6 +70,9 @@ const UserSchema = new mongoose.Schema({
     },
     subscription: {
         type: Object
+    },
+    previousSubscriptionStartDate: {
+        type: String
     },
     subscriptionStartDate: {
         type: String

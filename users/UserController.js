@@ -57,7 +57,9 @@ const register = async(req, res, next) => {
             email,
             password: hashedPassword,
             subscription: subscription,
+            previousSubscriptionStartDate: new Date().toLocaleString(),
             subscriptionStartDate: new Date().toLocaleString(),
+            previousPaymentDate: nextPaymentDate.toLocaleString(),
             nextPaymentDate: nextPaymentDate.toLocaleString(),
             thisMonthName: thisMonthName,
             lastMonthName: lastMonthName,
@@ -130,15 +132,15 @@ const me = async(req, res, next) => {
                 const subscriptionId = session.subscription;
         
                 if (!subscriptionId) {
-                  await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': 'FREE', stripeSessionId: '', stripeSubscriptionId: '' }}, { new: true });
+                  await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': 'FREE', stripeSessionId: '', stripeSubscriptionId: '', nextPaymentDate: user.previousPaymentDate, subscriptionStartDate: user.previousSubscriptionStartDate }}, { new: true });
                 } else {
                     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
                     if(subscription) {
-                        await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { stripeSubscriptionId: subscriptionId }}, { new: true });
+                        await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { stripeSubscriptionId: subscriptionId, previousPaymentDate: user.nextPaymentDate, previousSubscriptionStartDate: user.subscriptionStartDate }}, { new: true });
                     }
                 }
             } else {
-                await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': 'FREE', stripeSessionId: '', stripeSubscriptionId: '' }}, { new: true });
+                await UserSchema.findOneAndUpdate({ _id: user._id }, { $set: { 'subscription.type': 'FREE', stripeSessionId: '', stripeSubscriptionId: '', nextPaymentDate: user.previousPaymentDate, subscriptionStartDate: user.previousSubscriptionStartDate  }}, { new: true });
             }
         }
 
