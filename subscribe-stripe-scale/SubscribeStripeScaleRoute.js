@@ -29,7 +29,7 @@ SubscribeStripeScaleRoute.post('/', async(req, res) => {
             { $set: 
               { 
                 stripeSessionId: session.id, 
-                'subscription.type': 'PRO',
+                'subscription.type': 'SCALE',
                 subscriptionStartDate: new Date().toLocaleString(),
                 nextPaymentDate: nextPaymentDate.toLocaleString(),
               }

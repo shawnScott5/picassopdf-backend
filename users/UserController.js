@@ -391,7 +391,7 @@ const resetViewCount = async(req, res, next) => {
         date.setMonth(date.getMonth() + 1);
     }
 
-    const newNextPaymentDate = date.toLocaleDateString();
+    const newNextPaymentDate = date.toLocaleString();
     const userUpdated = await UserSchema.findOneAndUpdate(
                 { _id: filter.user._id }, 
                 { 
