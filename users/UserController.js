@@ -58,33 +58,41 @@ const register = async(req, res, next) => {
             password: hashedPassword,
             subscription: subscription,
             previousSubscriptionStartDate: new Date().toLocaleString('en-US', {
-                month: 'long',
+                month: 'numeric',
                 day: 'numeric',
                 year: 'numeric',
                 hour: 'numeric',
                 minute: '2-digit',
-            }),
+                second: '2-digit',
+                hour12: true, // 12-hour clock with AM/PM
+              }),
             subscriptionStartDate: new Date().toLocaleString('en-US', {
-                month: 'long',
+                month: 'numeric',
                 day: 'numeric',
                 year: 'numeric',
                 hour: 'numeric',
                 minute: '2-digit',
-            }),
+                second: '2-digit',
+                hour12: true, // 12-hour clock with AM/PM
+              }),
             previousPaymentDate: nextPaymentDate.toLocaleString('en-US', {
-                month: 'long',
+                month: 'numeric',
                 day: 'numeric',
                 year: 'numeric',
                 hour: 'numeric',
                 minute: '2-digit',
-            }),
+                second: '2-digit',
+                hour12: true, // 12-hour clock with AM/PM
+              }),
             nextPaymentDate: nextPaymentDate.toLocaleString('en-US', {
-                month: 'long',
+                month: 'numeric',
                 day: 'numeric',
                 year: 'numeric',
                 hour: 'numeric',
                 minute: '2-digit',
-            }),
+                second: '2-digit',
+                hour12: true, // 12-hour clock with AM/PM
+              }),
             thisMonthName: thisMonthName,
             lastMonthName: lastMonthName,
             referralCode: referralCode,
@@ -173,12 +181,14 @@ const me = async(req, res, next) => {
 
         //Reset monthly membership data (if applicable)
         const today = new Date().toLocaleString('en-US', {
-            month: 'long',
+            month: 'numeric',
             day: 'numeric',
             year: 'numeric',
             hour: 'numeric',
             minute: '2-digit',
-        });
+            second: '2-digit',
+            hour12: true, // 12-hour clock with AM/PM
+          });
         const todaysDate = new Date(today);
         const nextPaymentDate = new Date(user.nextPaymentDate);
        
@@ -198,12 +208,14 @@ const me = async(req, res, next) => {
             await UserSchema.findOneAndUpdate({ _id: user._id }, { 
                 $set: { 
                     nextPaymentDate: nextPaymentDate.toLocaleString('en-US', {
-                        month: 'long',
+                        month: 'numeric',
                         day: 'numeric',
                         year: 'numeric',
                         hour: 'numeric',
                         minute: '2-digit',
-                    }),
+                        second: '2-digit',
+                        hour12: true, // 12-hour clock with AM/PM
+                      }),
                     influencersEmailViewed: [],
                     influencersEmailViewedCount: 0,
                     tempViewLimit: null
@@ -431,12 +443,14 @@ const resetViewCount = async(req, res, next) => {
     }
 
     const newNextPaymentDate = date.toLocaleString('en-US', {
-        month: 'long',
+        month: 'numeric',
         day: 'numeric',
         year: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
-    });
+        second: '2-digit',
+        hour12: true, // 12-hour clock with AM/PM
+      });
     const userUpdated = await UserSchema.findOneAndUpdate(
                 { _id: filter.user._id }, 
                 { 

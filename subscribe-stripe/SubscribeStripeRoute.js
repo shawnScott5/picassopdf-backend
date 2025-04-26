@@ -32,18 +32,22 @@ SubscribeStripeRoute.post('/', async(req, res) => {
               stripeSessionId: session.id, 
               'subscription.type': 'PRO',
               subscriptionStartDate: new Date().toLocaleString('en-US', {
-                month: 'long',
+                month: 'numeric',
                 day: 'numeric',
                 year: 'numeric',
                 hour: 'numeric',
                 minute: '2-digit',
+                second: '2-digit',
+                hour12: true, // 12-hour clock with AM/PM
               }),
               nextPaymentDate: nextPaymentDate.toLocaleString('en-US', {
-                month: 'long',
+                month: 'numeric',
                 day: 'numeric',
                 year: 'numeric',
                 hour: 'numeric',
                 minute: '2-digit',
+                second: '2-digit',
+                hour12: true, // 12-hour clock with AM/PM
               }),
               }
             }, { new: true });
