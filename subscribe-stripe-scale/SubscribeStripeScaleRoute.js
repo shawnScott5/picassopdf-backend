@@ -30,8 +30,20 @@ SubscribeStripeScaleRoute.post('/', async(req, res) => {
               { 
                 stripeSessionId: session.id, 
                 'subscription.type': 'SCALE',
-                subscriptionStartDate: new Date().toLocaleString(),
-                nextPaymentDate: nextPaymentDate.toLocaleString(),
+                subscriptionStartDate: new Date().toLocaleString('en-US', {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                }),
+                nextPaymentDate: nextPaymentDate.toLocaleString('en-US', {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                }),
               }
             }, { new: true });
         }

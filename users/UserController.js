@@ -57,10 +57,34 @@ const register = async(req, res, next) => {
             email,
             password: hashedPassword,
             subscription: subscription,
-            previousSubscriptionStartDate: new Date().toLocaleString(),
-            subscriptionStartDate: new Date().toLocaleString(),
-            previousPaymentDate: nextPaymentDate.toLocaleString(),
-            nextPaymentDate: nextPaymentDate.toLocaleString(),
+            previousSubscriptionStartDate: new Date().toLocaleString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+            }),
+            subscriptionStartDate: new Date().toLocaleString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+            }),
+            previousPaymentDate: nextPaymentDate.toLocaleString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+            }),
+            nextPaymentDate: nextPaymentDate.toLocaleString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+            }),
             thisMonthName: thisMonthName,
             lastMonthName: lastMonthName,
             referralCode: referralCode,
@@ -148,7 +172,13 @@ const me = async(req, res, next) => {
         }
 
         //Reset monthly membership data (if applicable)
-        const today = new Date().toLocaleString();
+        const today = new Date().toLocaleString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+        });
         const todaysDate = new Date(today);
         const nextPaymentDate = new Date(user.nextPaymentDate);
        
@@ -167,7 +197,13 @@ const me = async(req, res, next) => {
 
             await UserSchema.findOneAndUpdate({ _id: user._id }, { 
                 $set: { 
-                    nextPaymentDate: nextPaymentDate.toLocaleString(),
+                    nextPaymentDate: nextPaymentDate.toLocaleString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                    }),
                     influencersEmailViewed: [],
                     influencersEmailViewedCount: 0,
                     tempViewLimit: null
@@ -394,7 +430,13 @@ const resetViewCount = async(req, res, next) => {
         date.setMonth(date.getMonth() + 1);
     }
 
-    const newNextPaymentDate = date.toLocaleString();
+    const newNextPaymentDate = date.toLocaleString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    });
     const userUpdated = await UserSchema.findOneAndUpdate(
                 { _id: filter.user._id }, 
                 { 
