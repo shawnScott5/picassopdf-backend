@@ -108,7 +108,7 @@ SubscribeStripeRoute.post('/cancel', async (req, res) => {
             stripeSessionId: '',
             stripeSubscriptionId: '',
             'subscription.type': 'FREE' ,
-            tempViewLimit: 1000
+            tempViewLimit: 500
           }
         }, { new: true });
     }
