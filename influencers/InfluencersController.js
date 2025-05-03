@@ -6,6 +6,7 @@ const fetchAllInfluencers = async(req, res, next) => {
     const sorting = { 'firstName': -1 };
     const filter = req.query;
     const query = { $and: [] }; // Initialize $and operator as an array
+    //filter.limit = undefined; Uncomment when cleaning up influencers in development mode
 
     if(filter.platform) {
         //query.$and.push({ platform: filter.platform }); UNCOMMENT LATER ONCE INFLUENCERS IN DB HAVE THIS FIELD ADDED

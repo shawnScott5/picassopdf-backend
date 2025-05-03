@@ -334,6 +334,20 @@ const scrapeForInfluencersWebsiteDomain = async(links, name, category) => {
     }
 }
 
+async function isEnglishBio(bio) {
+    const response = await deepSeekAi.chat.completions.create({
+        model: 'deepseek-chat', // Changed from "deepseek-chat AKA" to "deepseek-reasoner",
+        store: true,
+        messages: [
+            { role: "system", content: "You are a language detector. Only respond with true if the text is in English, or false if it is not. Do not explain anything." },
+            { role: "user", content: `Is this bio written in English? "${bio}"` }
+        ],
+    });
+
+    const answer = JSON.parse(response.choices[0].message.content)
+    return answer === 'true' || answer === true;
+}
+
 const identifyLinkType = async(link, name, category) => {
     try {
         const completion = await deepSeekAi.chat.completions.create({
@@ -527,7 +541,15 @@ const testImportFile = async(req, res, next) => {
     const adminUser = await UserSchema.findOne({admin: true});
 
     if(category == 'Update DB') {
-        await mapVerifiedEmailsToInfluencers(csv.data.data);
+        const invalid = [];
+        for(let influencer of csv.data.data) {
+            const isInEnglish = await isEnglishBio(influencer.biography);
+            if(isInEnglish === false || isInEnglish === 'false') {
+                await InfluencersSchema.deleteOne({ usernameIG: influencer.username });
+            }
+        }
+
+        res.json({ results: invalid });
     } else if(category == 'Update DB Emails') {
         await mapGrowmanEmailsToInfluencers(csv.data.data, csv.data.category);
     } else if(category == 'Clean List') {
@@ -862,41 +884,21 @@ const mapGrowmanEmailsToInfluencers = async (influencers, category) => {
     adminUser.save();
 };
 
-const mapVerifiedEmailsToInfluencers = async (emails) => {
-    for (const email of emails) {
-        const snovEmail = email.Email;
-        const emailStatus = email['Email status'];
-        const influencer = await InfluencersSchema.findOne({ possibleEmails: { $in: [snovEmail] } });
+const mapVerifiedEmailsToInfluencers = async () => {
+    const influencers = await InfluencersSchema.find({});
+    const validInfluencers = [];
 
-        if (influencer) {
-            if (emailStatus == "valid") {
-                // 3️⃣ Check if email already exists in the "emails" array
-                if (!influencer.emails?.some(email => email.toLowerCase() == snovEmail.toLowerCase())) {
-                    influencer.emails.push(snovEmail);
-                    
-                    influencer.possibleEmails = influencer.possibleEmails?.filter(email => email.toLowerCase() != snovEmail.toLowerCase());
-
-                    // 4️⃣ Save the updated document
-                    await influencer.save();
-                    console.log(`✅ Added verified email ${snovEmail} to ${influencer.usernameIG}`);
-                } else {
-                    console.log(`⚠️ Email ${snovEmail} already exists for ${influencer.usernameIG}`);
-                }
-            } else {
-                // 5️⃣ Remove the email from the "possibleEmails" array if the status is not valid
-                if(influencer.possibleEmails?.some(email => email.toLowerCase() == snovEmail.toLowerCase())) {
-                    influencer.possibleEmails = influencer.possibleEmails?.filter(email => email.toLowerCase() != snovEmail.toLowerCase());
-
-                    // 4️⃣ Save the updated document
-                    await influencer.save();
-                    console.log(`❌ Removed invalid email ${snovEmail} from ${influencer.usernameIG}'s possibleEmails`);
-                }
-            }
+    for (const influencer of influencers) {
+        if (!Array.isArray(influencer.emails) || influencer.emails?.length === 0) {
+            // Delete influencer if emails is empty or not an array
+            await InfluencersSchema.deleteOne({ _id: influencer._id });
         } else {
-            console.log(`❌ No influencer found for email: ${snovEmail}`);
+            validInfluencers.push(influencer);
         }
     }
-}
+
+    return validInfluencers;
+};
 
 const pullPossibleEmailsFromDB = async () => {
     const influencers = await InfluencersSchema.find({});
