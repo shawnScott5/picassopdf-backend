@@ -541,6 +541,9 @@ const testImportFile = async(req, res, next) => {
     const adminUser = await UserSchema.findOne({admin: true});
 
     if(category == 'Update DB') {
+
+        
+        /*
         const invalid = [];
         for(let influencer of csv.data.data) {
             const isInEnglish = await isEnglishBio(influencer.biography);
@@ -550,6 +553,7 @@ const testImportFile = async(req, res, next) => {
         }
 
         res.json({ results: invalid });
+        */
     } else if(category == 'Update DB Emails') {
         await mapGrowmanEmailsToInfluencers(csv.data.data, csv.data.category);
     } else if(category == 'Clean List') {
@@ -571,138 +575,25 @@ const testImportFile = async(req, res, next) => {
         adminUser.save();
 
         //const chatGptData = await fetchInfleuncersDataFromChatGPT();
-        const isCorrectInfluencerTypeData = await isCorrectInfluencerType(influencer.biography, influencer.fullName, `${category} Coach`);
-        if(isCorrectInfluencerTypeData && isCorrectInfluencerTypeData !== false && isCorrectInfluencerTypeData !== 'false') {
+        const isCorrectInfluencerTypeData = true //await isCorrectInfluencerType(influencer.biography, influencer.fullName, `${category} Coach`);
+        if(isCorrectInfluencerTypeData) {
             console.log('isCorrectInfluencerType:', true)
-            const isAvatarAPersonResult = await isAvatarAPerson(influencer.profilePicUrl);
-            if(isAvatarAPersonResult === true || isAvatarAPersonResult === 'true') {
+            const isAvatarAPersonResult = true //await isAvatarAPerson(influencer.profilePicUrl);
+            if(isAvatarAPersonResult) {
                 console.log('isCorrectAvatar:', true)
                 const influencerToAdd = {};
-                const emails = [];
-                const emailsSeen = [];
-                let emailsInBio = [];
-                if(influencer.bioEmail) {
-                    emailsInBio = influencer.bioEmail?.split(',')[0].trim().toLowerCase();
-                }
-                console.log('isEmailInBio:', emailsInBio);
 
                 influencerToAdd.category = `${category} Coach`;
-                let influencersRealName = await getInfluencersRealName(influencer.fullName, influencerToAdd.category, influencer.username, influencer.biography, influencer.externalUrl);
-                if(influencersRealName !== null && influencersRealName !== 'null') {
-                    console.log('influencersRealName:', influencersRealName);
-
-                    const linkType = influencer.externalUrl ? await identifyLinkType(influencer.externalUrl, influencersRealName, influencerToAdd.category) : null;
-                
-                    if(linkType && linkType != null && linkType != "null") {
-                        console.log('linkType:', linkType);
-                        console.log('SCRAPING LINK FOR MORE LINKS............')
-                        const bioLinksFound = await scrapeBioLinkForMoreLinks(influencer.externalUrl);
-                        console.log('moreLinksFound:', bioLinksFound)
-                        if(bioLinksFound && Array.isArray(bioLinksFound) && bioLinksFound?.length) {
-                            const emailInLinks = bioLinksFound?.filter(link => link?.startsWith("mailto:")).map(link => link?.replace("mailto:", ""));
-                            if(emailInLinks && Array.isArray(emailInLinks) && emailInLinks?.length) {
-                                emailInLinks.forEach((email) => {
-                                    if(!emailsSeen.includes(email)) {
-                                        emails.push(String(email).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase());
-                                        emailsSeen.push(String(email).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase());
-                                    }
-                                });
-                            }
-                        }
-                    
-                        if(String(linkType) === 'MINI-SITE' && bioLinksFound?.length) {
-                            const getInfuencersWebsiteDomain = await scrapeForInfluencersWebsiteDomain(bioLinksFound, influencersRealName, influencerToAdd.category);
-                            if(getInfuencersWebsiteDomain !== 'null' && getInfuencersWebsiteDomain !== null) {
-                                influencerToAdd.domain = String(getInfuencersWebsiteDomain).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase();
-                            }
-                        } else if(String(linkType) === 'BUSINESS-SITE') {
-                            influencerToAdd.domain = String(influencer.externalUrl).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase();
-                        }
-                    } else {        
-                        influencerToAdd.domain = null;
-                    }
-                    console.log('domain:', influencerToAdd.domain);
-
+                let influencersRealName = influencer.fullName;
+                if(influencersRealName) {
                     influencerToAdd.usernameIG = influencer.username;
-
-                    const nameParts = influencersRealName?.trim()?.split(/\s+/);
-                    influencerToAdd.firstName = nameParts[0] || "";
-
-                    const lastNamePrefixes = ["o'", "o", "da", "de", "st", "st.", "di", "del"];
-                    const isPrefix = lastNamePrefixes.includes(nameParts[1]?.toLowerCase());
-                    const fullLastName = isPrefix && nameParts.length > 2
-                        ? nameParts.slice(1).join(" ") // Join all remaining parts for correct last name
-                        : !isPrefix && nameParts.length > 2 
-                        ? nameParts[2]
-                        : nameParts[1] || null; // Use just the second part if no prefix
-                    influencerToAdd.lastName = fullLastName;
-                    
-                    influencerToAdd.fullName = fullLastName 
-                        ? `${influencerToAdd.firstName} ${fullLastName}` 
-                        : influencerToAdd.firstName;
-                        
+                    influencerToAdd.firstName = influencer.firstName;
+                    influencerToAdd.lastName = influencer.lastName;
+                    influencerToAdd.fullName = influencer.fullName;
                     influencerToAdd.profileUrlIG = influencer.inputUrl;
                     influencerToAdd.followersIG = formatNumberToSuffix(Number(influencer.followersCount));
                     influencerToAdd.followersIGNum = Number(influencer.followersCount); //convertToNumber(String(followersIG)) || 0;
-
-                    if (influencerToAdd.domain && influencerToAdd.firstName) {
-                        const cleanDomain = String(influencerToAdd.domain).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase(); // Removes leading/trailing quotes
-                        const match = cleanDomain.match(/:\/\/(?:www\.)?([^/]+)/);
-                        const domainEmail = match ? match[1] : null;
-
-                        if (domainEmail) {
-                            console.log('PUSHING POSSIBLE EMAILS...........')
-                            const possibleEmail = `${influencerToAdd.firstName.toLowerCase()}@${domainEmail}`;
-                            influencerToAdd.possibleEmails = [possibleEmail];
-                            // Check if lastName is present and add more variations
-                            if (influencerToAdd.lastName) {
-                                const firstNameLower = influencerToAdd.firstName.toLowerCase();
-                                const lastNameLower = influencerToAdd.lastName.toLowerCase();
-                                const formattedLastName = lastNameLower?.replace(/\s+/g, "");
-                               
-                                // Add variations to the possibleEmails array
-                                influencerToAdd.possibleEmails.push(`${firstNameLower}${formattedLastName}@${domainEmail}`);  // firstname + lastname
-                                influencerToAdd.possibleEmails.push(`${firstNameLower}.${formattedLastName}@${domainEmail}`);  // firstname.lastName
-                                influencerToAdd.possibleEmails.push(`${firstNameLower.charAt(0)}${formattedLastName}@${domainEmail}`);  // first initial + lastname
-                            }
-                            allPossibleEmails.push(possibleEmail);
-                        }
-
-                        let emailsInBioFound;
-                        if (Array.isArray(emailsInBio)) {
-                            // If it's already an array, just assign it directly
-                            emailsInBioFound = emailsInBio;
-                        } else if (typeof emailsInBio === "string") {
-                            // Check if the string looks like a JSON array
-                            try {
-                                // Remove quotes from the string and parse it
-                                emailsInBioFound = JSON.parse(emailsInBio);
-                            } catch (error) {
-                                console.error("Error parsing emailsInBio:", error);
-                                emailsInBioFound = []; // Default to an empty array if parsing fails
-                            }
-                        } else {
-                            emailsInBioFound = []; // Default to empty array if it's neither an array nor a valid string
-                        }
-
-                        if(emailsInBioFound !== null && emailsInBioFound !== 'null' && Array.isArray(emailsInBioFound) && emailsInBioFound?.length) {
-                            emailsInBioFound.forEach((email) => {
-                                if(!emailsSeen.includes(email)) {
-                                    emails.push(String(email).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase());
-                                    emailsSeen.push(String(email).split('?')[0].replace(/^["']|["']$/g, '').toLowerCase());
-                                }
-                            });
-                        }
-                    
-                        influencerToAdd.emails = emails;
-                        //influencerToAdd.profileUrlFacebook = hunterIoData?.data?.facebook;
-                        //influencerToAdd.profileUrlX = hunterIoData?.data?.twitter;
-                        //influencerToAdd.profileUrlYoutube = hunterIoData?.data?.youtube;
-                        //influencerToAdd.profileUrlLinkedIn = hunterIoData?.data?.linkedin;
-                    } else {
-                        influencerToAdd.emails = [];
-                    }
-
+                    if(influencer.emailFound) influencerToAdd.emails = [influencer.emailFound];
                     if (influencer.profilePicUrl) {
                         try {
                             console.log('EXPORTING PROFILE PIC TO CLOUDINARY...................................')
