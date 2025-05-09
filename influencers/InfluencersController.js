@@ -19,8 +19,10 @@ const fetchAllInfluencers = async(req, res, next) => {
     if(filter.category) {
         query.$and.push({ category: filter.category });
     }
-    if(filter.keywordSearch) {
-        query.$and.push({ fullName: { $regex: filter.keywordSearch, $options: 'i' } }); // Case-insensitive keyword search
+
+    if (filter.keywordSearch) {
+        const cleanedKeyword = filter.keywordSearch.trim().replace(/\s+/g, '.*');
+        query.$and.push({ fullName: { $regex: cleanedKeyword, $options: 'i' } });
     }
     
     if(filter.excludesInfluencersInLists === 'true' || filter.excludesInfluencersInLists === true) {
