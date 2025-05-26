@@ -333,8 +333,8 @@ const forgotPassword = async(req, res, next) => {
 
     const mailTransporter = nodemailer.createTransport({
         host: 'mail.privateemail.com', // Namechgit eap Private Email SMTP
-        port: 465, // Use 465 for SSL or 587 for TLS
-        secure: true, // true for port 465, false for 587
+        port: 587, // Use 465 for SSL or 587 for TLS
+        secure: false, // true for port 465, false for 587
         auth: {
             user: 'support@distros.io',
             pass: '20VY RP11 JRR4 VTNJ N3SJ UUF9 3695 EY6V' // Consider storing this in an env variable
