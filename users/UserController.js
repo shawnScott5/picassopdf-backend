@@ -329,20 +329,16 @@ const forgotPassword = async(req, res, next) => {
         token: token
     });
     
-   const nodemailer = require('nodemailer');
-
     const mailTransporter = nodemailer.createTransport({
-        host: 'mail.privateemail.com', // Namechgit eap Private Email SMTP
-        port: 587, // Use 465 for SSL or 587 for TLS
-        secure: false, // true for port 465, false for 587
+        service: 'gmail',
         auth: {
-            user: 'support@distros.io',
-            pass: '20VY RP11 JRR4 VTNJ N3SJ UUF9 3695 EY6V' // Consider storing this in an env variable
+            user: 'shawnscottjunior@gmail.com',
+            pass: 'rcll vbee edce yprn'
         }
-    });
+    })
 
     let mailDetails = {
-        from: 'support@distros.io',
+        from: 'shawnscottjunior@gmail.com',
         to: email,
         subject: 'Reset Your Distros Account Password',
         html: `
@@ -354,24 +350,22 @@ const forgotPassword = async(req, res, next) => {
             <h1 style="color: black;">Password Reset Request</h1>
             <p style="color: black;">${user.name},</p>
             <p style="color: black;">We received a request to reset your password for your Distros account. To complete the password reset process, please click the reset button below:</p>
-            <a href="${process.env.LIVE_URL}?token=${token}"><button style="background-color: #12e19f; color: white; padding: 14px 20px; border: 1px solid #12e19f; cursor: pointer; border-radius: 4px">Reset Password</button></a>
+             <a href=${process.env.LIVE_URL}?token=${token}><button style="background-color: #12e19f; color: white; padding: 14px 20px; border: 1px solid #12e19f; cursor: pointer; border-radius: 4px">Reset Password</button></a>
             <p style="color: black;">Please note that this link is only valid for 5mins. If you did not request a password reset, please disregard this message.</p>
             <p style="color: black;">Thank you,</p>
-            <p style="color: black;">Distros Team</p>
+            <p style="color: black;">Distros Team</P>
         </body>
         </html>
-        `
+        `,
     };
-
-    mailTransporter.sendMail(mailDetails, async (err, data) => {
-        if (err) {
-            return res.status(500).json({ error: 'Something went wrong' });
+    mailTransporter.sendMail(mailDetails, async(err, data) => {
+        if(err) {
+            return res.status(500).json({error: 'Something went wrong'});
         } else {
             await newToken.save();
-            return res.status(200).json({ message: 'Mail sent successfully' });
+            return res.status(200).json({message: 'Mail sent successfully'});
         }
     });
-
 };
 
 const resetPassword = async(req, res, next) => {
