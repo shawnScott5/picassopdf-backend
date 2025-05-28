@@ -63,6 +63,38 @@ const deleteList = async(req, res, next) => {
        return res.status(500).json({error: 'Something went wrong'});
 }
 
+const deleteInfluencerFromList = async(req, res, next) => {
+    try {
+    const { userId, listId, influencerId } = req.query; // Destructure query parameters
+
+    // Update the user's list by pulling the influencer with the specified listId
+    const updatedList = await ListsSchema.findOneAndUpdate(
+      { _id: listId, userId: userId }, // Find document by userId
+      { $pull: { influencers: { _id: influencerId } } }, // Remove influencer with matching listId from array
+      { new: true } // Return the updated document
+    );
+
+    if (updatedList) {
+      return res.status(200).json({
+        status: true,
+        message: 'Influencer was removed from the list successfully!',
+        data: updatedList // Return the updated list
+      });
+    }
+
+    return res.status(404).json({
+      status: false,
+      message: 'List or influencer not found'
+    });
+  } catch (error) {
+    console.error('Error deleting influencer from list:', error);
+    return res.status(500).json({
+      status: false,
+      message: 'Something went wrong'
+    });
+  }
+}
+
 const getMyLists = async(req, res, next) => {
     const filter = req.query;
     try {
@@ -80,4 +112,4 @@ const getMyLists = async(req, res, next) => {
     }
 }
 
-export { createNewList, getMyLists, deleteList, updateList };
+export { createNewList, getMyLists, deleteList, updateList, deleteInfluencerFromList };

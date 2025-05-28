@@ -473,6 +473,10 @@ const resetViewCount = async(req, res, next) => {
     }
 }
 
+const fetchMyMatches = async (req, res) => {
+    console.log('FETCHING MY MATCHES!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+}
+
 const updateAvatar = async (req, res) => {
     try {
         const form = req.body;
@@ -511,4 +515,4 @@ const updateAvatar = async (req, res) => {
 }
   
 
-export { register, login, me, forgotPassword, resetPassword, updateRevenue, updateAvatar, updateViewCount, resetViewCount };
+export { register, login, me, forgotPassword, resetPassword, updateRevenue, updateAvatar, updateViewCount, resetViewCount, fetchMyMatches };
