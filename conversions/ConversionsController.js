@@ -2,7 +2,7 @@ import ConversionsSchema from './ConversionsSchema.js';
 import LogsSchema from './LogsSchema.js';
 import UserSchema from '../users/UserSchema.js';
 import PDFPostProcessingService from '../services/PDFPostProcessingService.js';
-import { chromium } from 'playwright';
+import { chromium, install } from 'playwright';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
@@ -54,10 +54,29 @@ async function launchBrowser() {
     }
     
     // Fallback to Playwright's bundled browser
-    return await chromium.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    try {
+        console.log('🎭 Attempting to use Playwright bundled browser...');
+        return await chromium.launch({
+            headless: true,
+            args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        });
+    } catch (error) {
+        console.log('⚠️ Playwright bundled browser failed:', error.message);
+        console.log('🔧 Attempting runtime installation of Chromium...');
+        
+        // Last resort: install Chromium at runtime
+        try {
+            await install(['chromium']);
+            console.log('✅ Runtime Chromium installation successful');
+            return await chromium.launch({
+                headless: true,
+                args: ["--no-sandbox", "--disable-setuid-sandbox"],
+            });
+        } catch (installError) {
+            console.error('❌ Runtime installation failed:', installError.message);
+            throw new Error(`Browser launch failed: ${error.message}. Runtime install also failed: ${installError.message}`);
+        }
+    }
 }
 
 class ConversionsController {
