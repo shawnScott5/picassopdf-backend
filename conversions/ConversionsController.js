@@ -2,7 +2,7 @@ import ConversionsSchema from './ConversionsSchema.js';
 import LogsSchema from './LogsSchema.js';
 import UserSchema from '../users/UserSchema.js';
 import PDFPostProcessingService from '../services/PDFPostProcessingService.js';
-import { chromium, install } from 'playwright-core';
+import { chromium } from 'playwright';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
@@ -34,18 +34,6 @@ class ConversionsController {
         this.initializeR2();
         // Don't initialize browser in constructor - do it lazily when needed
         this.initQueue();
-        this.ensureBrowserInstalled();
-    }
-
-    async ensureBrowserInstalled() {
-        try {
-            console.log('🔧 Ensuring Playwright Chromium is installed...');
-            await install({ browsers: ['chromium'] });
-            console.log('✅ Playwright Chromium installation complete');
-        } catch (error) {
-            console.error('❌ Failed to install Playwright Chromium:', error);
-            // Don't throw here - let the browser initialization handle it
-        }
     }
 
     async ensurePDFDirectory() {
