@@ -1,0 +1,54 @@
+[33m5c9d0a6[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Remove manual browser install - using Playwright buildpack
+[33mfa99d6a[m Fix Playwright for Heroku - proper version and browser installation
+[33mc5c3073[m Restore original working setup - remove unnecessary complexity
+[33m49a543e[m Emergency fix - minimal working server
+[33meae75c2[m Switch to Playwright: Bulletproof PDF API with unlimited concurrency and zero clustering complexity
+[33m7604c3c[m Fix localhost/production compatibility - dynamic browser config and better environment detection
+[33m553d49f[m Initial commit: High-volume PDF API with dynamic browser clustering and queue management
+[33m972b6ff[m gametime
+[33me83f9f5[m test
+[33m0d8ee8a[m test
+[33m2a1c178[m pword
+[33me8ca33a[m come on
+[33mb876ea3[m nap town
+[33m55fd871[m come on
+[33m4b38365[m finally
+[33mdfaa37d[m lets launch!
+[33mf62e0bf[m production ready!
+[33m859cc93[m finally
+[33mc3b61d4[m all
+[33mb873b4f[m backend
+[33mb8c4583[m yurppp
+[33m3b78189[m yurp
+[33mff1f87e[m mas
+[33mb989539[m Ready!
+[33md2285ba[m production-ready
+[33m2cae017[m lets go
+[33m1f61603[m mas
+[33m2e70b87[m mas
+[33m46dfe40[m Oops
+[33m5e8aaa7[m Dashboard fix
+[33ma17a180[m cleanup
+[33m4a1b88d[m production fixes
+[33m94b3a06[m Launch Cleanup
+[33m29aab36[m Cleanup
+[33m6b3b97a[m Fixed crash i think
+[33m43df670[m Fixes
+[33m2e3bd9e[m Cors updated
+[33m28b5009[m routing error fixed
+[33mff0ef0b[m Fingerprint added
+[33m5c46c2e[m fix
+[33ma8add16[m Subscriptions added
+[33m11eca9a[m Another fix
+[33m32e9c8e[m New routes added
+[33mbd49b2c[m Fix
+[33mebcd606[m route refresh fixed
+[33m4d90cdb[m server fixed
+[33m8ae0cd6[m more server work
+[33me238d48[m subscription functionality started
+[33m102028a[m Backend logic cleaned up
+[33m99aeb18[m Admin file updated
+[33m16214f8[m server file updated
+[33mc685658[m Server.js configure updated
+[33m1ce5709[m Ensure all dependencies are installed
+[33m1a9d5bc[m Initial commit

@@ -3,8 +3,6 @@ import LogsSchema from './LogsSchema.js';
 import UserSchema from '../users/UserSchema.js';
 import PDFPostProcessingService from '../services/PDFPostProcessingService.js';
 import { chromium } from 'playwright';
-import puppeteer from 'puppeteer';
-import { Cluster } from 'puppeteer-cluster';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
@@ -230,70 +228,26 @@ class ConversionsController {
 
     async initCluster() {
         try {
-            // Truly dynamic concurrency - AWS determines optimal browser count
-            const maxConcurrency = this.calculateOptimalBrowserCount();
-            
-            this.cluster = await Cluster.launch({
-                concurrency: Cluster.CONCURRENCY_CONTEXT, // Best for PDF generation
-                maxConcurrency: maxConcurrency,
-                timeout: 120000, // 2 minute timeout for complex PDFs
-                retryLimit: 3, // More retries for reliability
-                retryDelay: 2000, // Longer delay between retries
-                puppeteerOptions: {
-                    headless: true,
-                    // Browser lifecycle optimization
-                    ignoreDefaultArgs: ['--disable-extensions'],
-                    args: [
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-accelerated-2d-canvas',
-                        '--no-first-run',
-                        '--no-zygote',
-                        '--disable-gpu',
-                        '--disable-background-timer-throttling',
-                        '--disable-backgrounding-occluded-windows',
-                        '--disable-renderer-backgrounding',
-                        '--disable-features=TranslateUI',
-                        '--disable-ipc-flooding-protection',
-                        '--memory-pressure-off',
-                        '--max_old_space_size=4096',
-                        '--disable-extensions',
-                        '--disable-default-apps',
-                        '--disable-web-security',
-                        '--disable-features=VizDisplayCompositor',
-                        // PDF generation optimizations
-                        '--disable-background-networking',
-                        '--disable-default-apps',
-                        '--disable-sync',
-                        '--metrics-recording-only',
-                        '--no-default-browser-check',
-                        '--no-first-run',
-                        '--disable-plugins',
-                        '--disable-translate',
-                        '--disable-logging'
-                    ]
-                },
-                monitor: process.env.NODE_ENV === 'development',
-                // Browser lifecycle management
-                workerCreationDelay: 100, // Stagger browser creation
-                sameDomainDelay: 50 // Small delay for same domain requests
+            // Simple Playwright browser - handles unlimited concurrent requests
+            this.browser = await chromium.launch({
+                headless: true,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu'
+                ]
             });
-
-            console.log(`🚀 Puppeteer cluster initialized with ${maxConcurrency} concurrent browsers`);
-            console.log(`📊 Expected capacity: ~${maxConcurrency * 60} PDFs/hour, ~${maxConcurrency * 60 * 24} PDFs/day`);
-            console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`💾 Memory per browser: ~150-200MB (Total: ~${Math.round(maxConcurrency * 175 / 1024 * 100) / 100}GB)`);
+            console.log('✅ Playwright browser initialized - unlimited concurrency ready');
         } catch (error) {
-            console.error('Failed to initialize cluster:', error);
-            // Fallback to single browser
-            await this.initBrowser();
+            console.error('Failed to initialize browser:', error);
+            this.browser = null;
         }
     }
 
     async initBrowser() {
         try {
-            this.browser = await puppeteer.launch({
+            this.browser = await chromium.launch({
                 headless: true,
                 args: [
                     '--no-sandbox',
@@ -452,8 +406,12 @@ class ConversionsController {
             }
         }
 
-        if (!this.cluster) {
-            throw new Error('Cluster not initialized');
+        if (!this.browser) {
+            await this.initCluster();
+        }
+
+        if (!this.browser) {
+            throw new Error('Browser not initialized');
         }
 
         const pdfOptions = {
@@ -482,12 +440,13 @@ class ConversionsController {
         }
 
         try {
-            const pdf = await this.cluster.execute({ htmlContent, pdfOptions }, async ({ page, data }) => {
-                const { htmlContent, pdfOptions } = data;
-                
-                // Set viewport for consistent rendering
-                await page.setViewport({ width: 1200, height: 800 });
-                
+            // Create isolated context for this request (Playwright's unlimited concurrency)
+            const context = await this.browser.newContext({
+                viewport: { width: 1200, height: 800 }
+            });
+            const page = await context.newPage();
+
+            try {
                 // Set content with optimized wait conditions
                 await page.setContent(htmlContent, { 
                     waitUntil: 'domcontentloaded',
@@ -500,20 +459,20 @@ class ConversionsController {
                 // Generate PDF
                 const pdf = await page.pdf(pdfOptions);
                 
+                // Cache the result (skip for URLs)
+                if (!options.isUrl) {
+                    const cacheKey = this.generateCacheKey(htmlContent, options);
+                    this.cachePDF(cacheKey, pdf);
+                }
+
+                console.log(`📄 PDF generated: ${pdf.length} bytes`);
                 return pdf;
-            });
-
-            // Cache the result (skip for URLs)
-            if (!options.isUrl) {
-                const cacheKey = this.generateCacheKey(htmlContent, options);
-                this.cachePDF(cacheKey, pdf);
+            } finally {
+                await context.close(); // Playwright context cleanup
             }
-
-            return pdf;
         } catch (error) {
-            console.error('Cluster PDF generation failed:', error);
-            // Fallback to single browser if cluster fails
-            return await this.generatePDFWithSingleBrowser(htmlContent, pdfOptions);
+            console.error('PDF generation failed:', error);
+            throw error;
         }
     }
 
