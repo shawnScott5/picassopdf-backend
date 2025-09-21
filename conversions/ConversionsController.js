@@ -305,85 +305,102 @@ class ConversionsController {
             const cacheKey = this.generateCacheKey(htmlContent, options);
             const cachedPDF = this.getCachedPDF(cacheKey);
             if (cachedPDF) {
+                console.log('✅ Serving PDF from cache:', cacheKey.substring(0, 8) + '...');
                 return cachedPDF;
             }
+            console.log('💾 Cached PDF:', cacheKey.substring(0, 8) + '...', 
+                       `(${this.pdfCache.size}/${this.maxCacheSize})`);
         }
 
         // Use Playwright for full HTML/CSS/JS rendering
         console.log('📝 Generating PDF using Playwright...');
         
+        let browser = null;
+        let page = null;
+        
         try {
-            const browser = await this.initBrowser();
-            const page = await browser.newPage();
-            
-            try {
-                if (options.isUrl) {
-                    // URL request - navigate directly
-                    console.log('🌐 URL request detected - navigating to URL');
-                    await page.goto(htmlContent, { 
-                        waitUntil: 'networkidle0',
-                        timeout: 30000 
-                    });
-        } else {
-                    // HTML content - set content directly
-                    console.log('📄 HTML content detected - setting content');
-                    await page.setContent(htmlContent, { 
-                        waitUntil: 'networkidle0',
-                        timeout: 30000 
-                    });
-                }
-                
-                // Generate PDF
-                const pdfBuffer = await page.pdf({
-                    format: options.format || 'A4',
-                    printBackground: true,
-                    margin: options.margin || {
-                        top: '20px',
-                        right: '20px',
-                        bottom: '20px',
-                        left: '20px'
-                    }
-                });
-                
-                console.log(`📄 PDF generated: ${pdfBuffer.length} bytes`);
-                return pdfBuffer;
-                
-            } finally {
-                await page.close();
+            // Create a fresh browser instance for each PDF generation
+            // This prevents issues with closed browsers
+            const launchOptions = {
+                headless: true,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-web-security',
+                    '--disable-features=VizDisplayCompositor',
+                    '--single-process',
+                    '--no-zygote',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-renderer-backgrounding',
+                    '--memory-pressure-off',
+                    '--max_old_space_size=4096'
+                ]
+            };
+
+            // On Render/Docker, use system Chromium
+            if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
+                launchOptions.executablePath = '/usr/bin/chromium';
+                console.log('🐳 Using system-installed Chromium (Docker/Render)');
             }
+
+            browser = await chromium.launch(launchOptions);
+            page = await browser.newPage();
+            
+            if (options.isUrl) {
+                // URL request - navigate directly
+                console.log('🌐 URL request detected - navigating to URL');
+                await page.goto(htmlContent, { 
+                    waitUntil: 'networkidle0',
+                    timeout: 30000 
+                });
+            } else {
+                // HTML content - set content directly
+                console.log('📄 HTML content detected - setting content');
+                await page.setContent(htmlContent, { 
+                    waitUntil: 'networkidle0',
+                    timeout: 30000 
+                });
+            }
+            
+            // Generate PDF
+            const pdfBuffer = await page.pdf({
+                format: options.format || 'A4',
+                printBackground: true,
+                margin: options.margin || {
+                    top: '20px',
+                    right: '20px',
+                    bottom: '20px',
+                    left: '20px'
+                }
+            });
+            
+            console.log(`📄 PDF generated: ${pdfBuffer.length} bytes`);
+            return pdfBuffer;
+            
         } catch (error) {
             console.error('Error in generatePDF:', error);
             throw error;
+        } finally {
+            // Always clean up browser and page
+            if (page) {
+                try {
+                    await page.close();
+                } catch (e) {
+                    console.log('Page already closed');
+                }
+            }
+            if (browser) {
+                try {
+                    await browser.close();
+                } catch (e) {
+                    console.log('Browser already closed');
+                }
+            }
         }
-
-        const pdfOptions = {
-            format: options.format || 'A4',
-            printBackground: true,
-            preferCSSPageSize: true,
-            margin: options.margin || {
-                top: '10px',
-                right: '10px',
-                bottom: '10px',
-                left: '10px'
-            },
-            scale: options.scale || 0.9, // Slightly smaller for faster generation
-            displayHeaderFooter: options.displayHeaderFooter || false,
-            landscape: options.landscape || false,
-            width: options.width,
-            height: options.height,
-            pageRanges: options.pageRanges || '',
-            timeout: 30000
-        };
-
-        // Add header/footer if requested
-        if (options.displayHeaderFooter) {
-            pdfOptions.headerTemplate = options.headerTemplate || '<div></div>';
-            pdfOptions.footerTemplate = options.footerTemplate || '<div></div>';
-        }
-
     }
-
-
 
 
     /**
