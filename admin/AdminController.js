@@ -1,7 +1,7 @@
 import InfluencersSchema from '../influencers/InfluencersSchema.js';
 import multer from 'multer';
 import cloudinary from 'cloudinary';
-import { chromium } from 'playwright';
+// Browser automation removed - using pdf-lib for PDF generation
 // import OpenAI from "openai"; // Disabled for deployment
 import dotenv from 'dotenv';
 import UserSchema from '../users/UserSchema.js';
@@ -817,33 +817,22 @@ const getUpdatedDataFromApify = async(req, res, next) => {
 
 
 const scrapeLink = async (url) => {
-    let browser;
     try {
-        // Launch browser with some options for better performance
-        browser = await chromium.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        const page = await browser.newPage();
-
-        // Navigate to the URL and wait until DOM is fully loaded
-        await page.goto(url, { waitUntil: 'domcontentloaded' });
-
-        // Extract all links
-        const links = await page.evaluate(() => {
-            return Array.from(document.querySelectorAll('a'))
-                .map(a => a.href)
-                .filter(href => href); // Filter out null or undefined hrefs
-        });
-
+        // Simple fetch-based link extraction (no browser needed)
+        const response = await fetch(url);
+        const html = await response.text();
+        const linkRegex = /href\s*=\s*["']([^"']+)["']/gi;
+        const links = [];
+        let match;
+        
+        while ((match = linkRegex.exec(html)) !== null) {
+            links.push(match[1]);
+        }
+        
         return links;
     } catch (error) {
+        console.error('Error scraping links:', error);
         return []; // Return an empty array if an error occurs
-    } finally {
-        // Ensure the browser is always closed
-        if (browser) {
-            await browser.close();
-        }
     }
 };
 

@@ -2,7 +2,7 @@ import ConversionsSchema from './ConversionsSchema.js';
 import LogsSchema from './LogsSchema.js';
 import UserSchema from '../users/UserSchema.js';
 import PDFPostProcessingService from '../services/PDFPostProcessingService.js';
-import { chromium } from 'playwright';
+import PDFLibService from '../services/PDFLibService.js';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
@@ -23,9 +23,9 @@ const __dirname = path.dirname(__filename);
 
 class ConversionsController {
     constructor() {
-        this.browser = null; // Single Playwright browser for everything
         this.pdfStoragePath = path.join(__dirname, '..', '..', 'pdfs');
         this.pdfPostProcessingService = new PDFPostProcessingService();
+        this.pdfLibService = new PDFLibService();
         this.pdfCache = new Map(); // Simple in-memory cache
         this.maxCacheSize = 100; // Maximum number of cached PDFs
         this.cacheExpiry = 10 * 60 * 1000; // 10 minutes
@@ -195,26 +195,6 @@ class ConversionsController {
 
 
 
-    async initBrowser() {
-        if (!this.browser) {
-            try {
-                this.browser = await chromium.launch({
-                    headless: true,
-                    args: [
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-gpu'
-                    ]
-                });
-                console.log('✅ Playwright browser ready - optimized for Render deployment');
-            } catch (error) {
-                console.error('Playwright browser failed:', error);
-                throw error;
-            }
-        }
-        return this.browser;
-    }
 
     async initQueue() {
         try {
@@ -355,17 +335,23 @@ class ConversionsController {
             }
         }
 
-        // Smart browser selection based on content type
-        const isUrlRequest = options.isUrl || false;
+        // Use PDFLibService for all PDF generation
+        console.log('📝 Generating PDF using pdf-lib...');
         
-        if (isUrlRequest) {
-            // URL requests: Use simple Playwright
-            console.log('🌐 URL request detected - using Playwright');
-            return await this.generatePDFWithPuppeteer(htmlContent, options);
-        } else {
-            // HTML/CSS/JS requests: Use Playwright + Paged.js
-            console.log('📝 HTML content detected - using Playwright + Paged.js');
-            return await this.generatePDFWithPuppeteerPagedJS(htmlContent, options);
+        try {
+            // If it's a URL, fetch the content first
+            if (options.isUrl) {
+                console.log('🌐 URL request detected - fetching content first');
+                const response = await axios.get(htmlContent, { timeout: 15000 });
+                htmlContent = response.data;
+            }
+            
+            // Generate PDF using pdf-lib
+            const pdfBuffer = await this.pdfLibService.generatePDFFromHTML(htmlContent, options);
+            return pdfBuffer;
+        } catch (error) {
+            console.error('Error in generatePDFWithCluster:', error);
+            throw error;
         }
 
         const pdfOptions = {
@@ -395,95 +381,7 @@ class ConversionsController {
 
     }
 
-    // Playwright + Paged.js for HTML/CSS/JS content
-    async generatePDFWithPuppeteerPagedJS(htmlContent, options = {}) {
-        let browser = null;
-        let page = null;
-        
-        try {
-            browser = await this.initBrowser();
-            page = await browser.newPage();
-            await page.setViewportSize({ width: 1200, height: 800 });
 
-            // Inject Paged.js for advanced print layouts
-            await page.addScriptTag({ 
-                url: 'https://unpkg.com/pagedjs/dist/paged.polyfill.js' 
-            });
-
-            // Set content and wait for Paged.js to process
-            await page.setContent(htmlContent, { waitUntil: 'load', timeout: 15000 });
-            await page.waitForFunction(() => window.PagedPolyfill, { timeout: 10000 });
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Let Paged.js finish
-
-            const pdf = await page.pdf({
-                format: options.format || 'A4',
-                printBackground: true,
-                margin: options.margin || { top: '20px', right: '20px', bottom: '20px', left: '20px' }
-            });
-
-            console.log(`📄 Playwright + Paged.js PDF: ${pdf.length} bytes`);
-            return pdf;
-        } catch (error) {
-            console.error('Error in generatePDFWithPuppeteerPagedJS:', error);
-            throw error;
-        } finally {
-            try {
-                if (page) await page.close();
-            } catch (closeError) {
-                console.error('Error closing page:', closeError);
-            }
-        }
-    }
-
-    // Simple Playwright for URL requests
-    async generatePDFWithPuppeteer(url, options = {}) {
-        const browser = await this.initBrowser();
-        const page = await browser.newPage();
-
-        try {
-            await page.goto(url, { 
-                waitUntil: 'load', // Don't wait for networkidle
-                timeout: 15000 
-            });
-            await new Promise(resolve => setTimeout(resolve, 300));
-
-            const pdf = await page.pdf({
-                format: options.format || 'A4',
-                printBackground: true,
-                margin: options.margin || { top: '20px', right: '20px', bottom: '20px', left: '20px' }
-            });
-
-            console.log(`📄 Playwright URL PDF: ${pdf.length} bytes`);
-            return pdf;
-        } finally {
-            await page.close();
-        }
-    }
-
-    /**
-     * Fallback PDF generation with single browser
-     */
-    async generatePDFWithSingleBrowser(htmlContent, pdfOptions) {
-        if (!this.browser) {
-            await this.initBrowser();
-        }
-
-        const page = await this.browser.newPage();
-        
-        try {
-            await page.setViewport({ width: 1200, height: 800 });
-            await page.setContent(htmlContent, { 
-                waitUntil: 'domcontentloaded',
-                timeout: 15000 
-            });
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            const pdf = await page.pdf(pdfOptions);
-            return pdf;
-        } finally {
-            await page.close();
-        }
-    }
 
     /**
      * Render HTML with JavaScript and extract final DOM for Gemini analysis
