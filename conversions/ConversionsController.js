@@ -218,44 +218,10 @@ class ConversionsController {
                     ]
                 };
 
-                // Use installed Chrome in production
+                // Use Puppeteer's executablePath in production (where Chrome was installed during build)
                 if (process.env.NODE_ENV === 'production') {
-                    const fs = await import('fs');
-                    const path = await import('path');
-                    const puppeteerPath = '/opt/render/.cache/puppeteer';
-                    
-                    try {
-                        // Find the Chrome executable dynamically
-                        const chromeDir = fs.readdirSync(puppeteerPath).find(dir => dir.startsWith('chrome'));
-                        if (chromeDir) {
-                            const chromePath = path.join(puppeteerPath, chromeDir, 'chrome-linux64', 'chrome');
-                            if (fs.existsSync(chromePath)) {
-                                puppeteerOptions.executablePath = chromePath;
-                                console.log('Using installed Chrome at:', chromePath);
-                            }
-                        }
-                    } catch (error) {
-                        console.log('Could not find installed Chrome, trying system Chrome');
-                        // Try common system Chrome paths
-                        const systemPaths = [
-                            '/usr/bin/google-chrome',
-                            '/usr/bin/google-chrome-stable',
-                            '/usr/bin/chromium-browser',
-                            '/usr/bin/chromium'
-                        ];
-                        
-                        for (const systemPath of systemPaths) {
-                            try {
-                                if (fs.existsSync(systemPath)) {
-                                    puppeteerOptions.executablePath = systemPath;
-                                    console.log('Using system Chrome at:', systemPath);
-                                    break;
-                                }
-                            } catch (e) {
-                                // Continue to next path
-                            }
-                        }
-                    }
+                    puppeteerOptions.executablePath = puppeteer.executablePath();
+                    console.log('Using Puppeteer-installed Chrome at:', puppeteerOptions.executablePath);
                 }
 
                 this.browser = await puppeteer.launch(puppeteerOptions);
