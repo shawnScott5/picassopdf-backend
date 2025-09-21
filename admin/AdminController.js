@@ -2,7 +2,7 @@ import InfluencersSchema from '../influencers/InfluencersSchema.js';
 import multer from 'multer';
 import cloudinary from 'cloudinary';
 import puppeteer, { Puppeteer } from 'puppeteer';
-import OpenAI from "openai";
+// import OpenAI from "openai"; // Disabled for deployment
 import dotenv from 'dotenv';
 import UserSchema from '../users/UserSchema.js';
 dotenv.config();
@@ -14,8 +14,8 @@ const snovIoUserId = process.env.SNOV_USER_ID;
 const snovIoSecret = process.env.SNOV_SECRET;
 const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY;
 const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET;
-const openAiApiKey = process.env.OPENAI_API_KEY;
-const deepSeekApiKey = process.env.DEEPSEEK_API_KEY;
+// const openAiApiKey = process.env.OPENAI_API_KEY; // Disabled
+// const deepSeekApiKey = process.env.DEEPSEEK_API_KEY; // Disabled
 //Configure Cloudinary
 cloudinary.config({
     cloud_name: 'dza3ed8yw',
@@ -23,15 +23,15 @@ cloudinary.config({
     api_secret: cloudinaryApiSecret
 });
 
-// Initialize the OpenAI client with your API key
-const openai = new OpenAI({
-    apiKey: openAiApiKey, // Replace with your OpenAI API key
-});
+// Initialize the OpenAI client with your API key - DISABLED
+// const openai = new OpenAI({
+//     apiKey: openAiApiKey, // Replace with your OpenAI API key
+// });
 
-const deepSeekAi = new OpenAI({
-    baseURL: 'https://api.deepseek.com',
-    apiKey: deepSeekApiKey
-});
+// const deepSeekAi = new OpenAI({
+//     baseURL: 'https://api.deepseek.com',
+//     apiKey: deepSeekApiKey
+// }); // Disabled for deployment
 
 /*
 // Function to fetch emails by domain
@@ -226,154 +226,47 @@ const isCorrectLeadType = async(bio, profileName) => {
     }
 }
 
+// DISABLED - OpenAI function removed for deployment
 const getInfluencersRealName = async(name, category, username, bio, bioLink) => {
     try {
-        console.log(category)
-        if(category == 'Dating Coach') {
-            category = 'Dating, Relationship or Marriage Coach'
-        }
-        if(category == 'Fitness Coach') {
-            category = 'Fitness/Workout Coach or Fitness/Workout Trainer'
-        }
-
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4-turbo",
-            messages: [
-                {
-                    role: "user",
-                    content: `Try to extract the Instagram influencer's real name from their profile name or bio. This influencer is a ${category}.
-                    Name: ${name}
-                    Bio: ${bio}
-                     
-                    - The name should include both first and last names if available, but sometimes only the first name is present.  
-                    - Never return a name with "Coach" in it.
-                    - If a name is found, return their name only, no other text
-                    - If no name is found, return only "null"`
-                }
-            ]
-        });
-
-        const data = completion.choices[0].message.content;
-        return data;
+        console.log('OpenAI function disabled - returning null');
+        return null;
     } catch (error) {
         return null;
     }
 }
 
+// DISABLED - OpenAI function removed for deployment
 const isAvatarAPerson = async(url) => {
     try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo", // Replace with the appropriate model, if needed
-        messages: [
-            { 
-                role: "user", 
-                content: [
-                    { 
-                        type: "text", 
-                        text: `I have this URL to an Instagram influencer's profile picture/avatar: "${url}". Typically, if the profile picture is not of a **real person** or **the influencer themselves**, it’s either a fake page or a company page.  
-                        I want to filter out all fake and company Instagram pages. Please analyze the image and determine if the profile picture is of the influencer themselves.  
-                        - If the image is of a **real person** or the **influencer themselves**, respond with "true".  
-                        - If the image is not of the influencer (e.g: a company logo or stock image), respond with "false".  
-                        
-                        **Response Format (Strictly return only:**  
-                        - "true" (if it’s a person)  
-                        - "false" (if not a person)`
-                    },
-                    {
-                        type: "image_url",
-                        image_url: { 
-                            url: url 
-                        }
-                    },
-                ]
-            }
-        ],
-        max_tokens: 300,
-    });
-
-    const data = await JSON.parse(response.choices[0].message.content);
-    return data;
-  } catch (error) {
-    return null;
-  }
-}
-
-const scrapeForInfluencersWebsiteDomain = async(links, name, category) => {
-    try {
-        if(category == 'Dating Coach') {
-            category = 'Dating, Relationship or Marriage Coach'
-        }
-        if(category == 'Fitness Coach') {
-            category = 'Fitness/Workout Coach or Fitness/Workout Trainer'
-        }
-
-        const completion = await deepSeekAi.chat.completions.create({
-            model: 'deepseek-reasoner', // Changed from "deepseek-chat AKA" to "deepseek-reasoner",
-            store: true,
-            messages: [
-                { 
-                    role: "user", 
-                    content: `Analyze the following links:  
-                    - Links: ${links}" 
-            
-                    Identify the **official business website** of ${name} who is a ${category} influencer, by following these rules:  
-                    - Prioritize the **shortest root domain** (e.g: "example.com" over "sub.example.com").  
-                    - Ignore subdomains unless no root domain exists.  
-                    - If multiple links share the same root domain, return the simplest, shortest link only (without quotes). 
-                    - If no business website is found, return "null" (without quotes).  
-            
-                    **Response Format (Strictly return only 1 link or "null", no extra text):**`
-                }
-            ],
-            temperature: 0
-        });
-
-        return completion.choices[0].message.content;
+        console.log('OpenAI function disabled - returning true');
+        return true; // Default to true to avoid blocking functionality
     } catch (error) {
         return null;
     }
 }
 
-async function isEnglishBio(bio) {
-    const response = await deepSeekAi.chat.completions.create({
-        model: 'deepseek-chat', // Changed from "deepseek-chat AKA" to "deepseek-reasoner",
-        store: true,
-        messages: [
-            { role: "system", content: "You are a language detector. Only respond with true if the text is in English, or false if it is not. Do not explain anything." },
-            { role: "user", content: `Is this bio written in English? "${bio}"` }
-        ],
-    });
-
-    const answer = JSON.parse(response.choices[0].message.content)
-    return answer === 'true' || answer === true;
+// DISABLED - DeepSeek AI function removed for deployment
+const scrapeForInfluencersWebsiteDomain = async(links, name, category) => {
+    try {
+        console.log('DeepSeek AI function disabled - returning null');
+        return null;
+    } catch (error) {
+        return null;
+    }
 }
 
+// DISABLED - DeepSeek AI function removed for deployment
+async function isEnglishBio(bio) {
+    console.log('DeepSeek AI function disabled - returning true');
+    return true; // Default to true to avoid blocking functionality
+}
+
+// DISABLED - DeepSeek AI function removed for deployment
 const identifyLinkType = async(link, name, category) => {
     try {
-        const completion = await deepSeekAi.chat.completions.create({
-            //model: "gpt-4",
-            model: 'deepseek-chat', // Changed from "deepseek-chat AKA" to "deepseek-reasoner",
-            store: true,
-            messages: [
-                { 
-                    role: "user", 
-                    content: `Analyze the following link and classify it accordingly:  
-                    - Link: ${link}
-            
-                    Determine if the link falls into one of these categories:  
-                    - MINI-SITE → A multi-link mini-site (e.g: Linktree, Beacons, Tap.bio, etc.).  
-                    - BUSINESS-SITE → The influencer’s official business website.  
-                    - null → If the link is neither a mini-site nor an official business website.  
-            
-                    **Response Format (Strictly return only one of the following, no extra text):**  
-                    - MINI-SITE
-                    - BUSINESS-SITE  
-                    - null`
-                }
-            ]
-        });
-
-        return completion.choices[0].message.content;
+        console.log('DeepSeek AI function disabled - returning null');
+        return null;
     } catch (error) {
         return null;
     }

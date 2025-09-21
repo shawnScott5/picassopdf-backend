@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { promises as fsPromises, existsSync } from 'fs';
-import AWS from 'aws-sdk';
+// import AWS from 'aws-sdk'; // Disabled for deployment
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import * as cheerio from 'cheerio';

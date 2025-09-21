@@ -5,10 +5,7 @@
     "main": "server.js",
     "license": "MIT",
     "dependencies": {
-        "@notionhq/client": "^2.2.15",
-        "@supabase/supabase-js": "^2.39.0",
         "airtable": "^0.12.2",
-        "aws-sdk": "^2.1691.0",
         "axios": "^1.7.9",
         "bcrypt": "^5.1.1",
         "body-parser": "^1.20.3",
@@ -29,7 +26,6 @@
         "mongoose": "^8.9.5",
         "multer": "^1.4.5-lts.1",
         "nodemailer": "^6.9.15",
-        "openai": "^4.67.3",
         "papaparse": "^5.4.1",
         "pdf-lib": "^1.17.1",
         "playwright": "^1.49.1",

@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import AWS from 'aws-sdk';
-import * as Minio from 'minio';
-import { createClient } from '@supabase/supabase-js';
+// import AWS from 'aws-sdk'; // Disabled for deployment
+// import * as Minio from 'minio'; // Disabled for deployment
+// import { createClient } from '@supabase/supabase-js'; // Disabled for deployment
 import { v4 as uuidv4 } from 'uuid';
 
 class StorageService {

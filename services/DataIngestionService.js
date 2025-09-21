@@ -1,4 +1,4 @@
-import { Client } from '@notionhq/client';
+// import { Client } from '@notionhq/client'; // Disabled for deployment
 import Airtable from 'airtable';
 import Papa from 'papaparse';
 import axios from 'axios';
