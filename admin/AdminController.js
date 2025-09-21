@@ -1,7 +1,7 @@
 import InfluencersSchema from '../influencers/InfluencersSchema.js';
 import multer from 'multer';
 import cloudinary from 'cloudinary';
-import { chromium } from 'playwright';
+import { chromium, install } from 'playwright-core';
 // import OpenAI from "openai"; // Disabled for deployment
 import dotenv from 'dotenv';
 import UserSchema from '../users/UserSchema.js';
