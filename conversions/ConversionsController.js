@@ -352,17 +352,10 @@ class ConversionsController {
                 ]
             };
 
-            // On Render, use system Chromium (if available) or fallback to Playwright's browser
-            if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
-                try {
-                    // Try system Chromium first (if Docker is used)
-                    launchOptions.executablePath = '/usr/bin/chromium';
-                    console.log('🐳 Using system Chromium (Render/Docker)');
-                } catch (e) {
-                    // Fallback to Playwright's bundled browser
-                    delete launchOptions.executablePath;
-                    console.log('🔄 Using Playwright bundled browser');
-                }
+            // Use system Chromium when PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD is set (Docker/Render)
+            if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
+                launchOptions.executablePath = '/usr/bin/chromium';
+                console.log('🐳 Using system Chromium (Docker/Render)');
             }
 
             browser = await chromium.launch(launchOptions);
