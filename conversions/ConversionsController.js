@@ -437,7 +437,7 @@ class ConversionsController {
             // Set content and wait for Paged.js to process
             await page.setContent(htmlContent, { waitUntil: 'load', timeout: 10000 });
             await page.waitForFunction(() => window.PagedPolyfill, { timeout: 5000 });
-            await page.waitForTimeout(500); // Let Paged.js finish
+            await new Promise(resolve => setTimeout(resolve, 500)); // Let Paged.js finish
 
             const pdf = await page.pdf({
                 format: options.format || 'A4',
@@ -463,7 +463,7 @@ class ConversionsController {
                 waitUntil: 'load', // Don't wait for networkidle
                 timeout: 15000 
             });
-            await page.waitForTimeout(300);
+            await new Promise(resolve => setTimeout(resolve, 300));
 
             const pdf = await page.pdf({
                 format: options.format || 'A4',
@@ -495,7 +495,7 @@ class ConversionsController {
                 waitUntil: 'domcontentloaded',
                 timeout: 15000 
             });
-            await page.waitForTimeout(500);
+            await new Promise(resolve => setTimeout(resolve, 500));
             
             const pdf = await page.pdf(pdfOptions);
             return pdf;
@@ -567,7 +567,7 @@ class ConversionsController {
             });
 
             // Wait for any delayed JavaScript execution (reduced time)
-            await page.waitForTimeout(1000);
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             // Extract the final rendered HTML and computed styles
             const renderedData = await page.evaluate(() => {
