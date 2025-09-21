@@ -2,7 +2,7 @@ import ConversionsSchema from './ConversionsSchema.js';
 import LogsSchema from './LogsSchema.js';
 import UserSchema from '../users/UserSchema.js';
 import PDFPostProcessingService from '../services/PDFPostProcessingService.js';
-import { chromium, install } from 'playwright';
+import { chromium } from 'playwright';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
@@ -66,6 +66,7 @@ async function launchBrowser() {
         
         // Last resort: install Chromium at runtime
         try {
+            const { install } = await import('playwright');
             await install(['chromium']);
             console.log('✅ Runtime Chromium installation successful');
             return await chromium.launch({
