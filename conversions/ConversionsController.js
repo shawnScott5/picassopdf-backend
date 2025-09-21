@@ -218,50 +218,10 @@ class ConversionsController {
                     ]
                 };
 
-                // Use Puppeteer's executablePath in production (where Chrome was installed during build)
+                // Use Render's system Chromium in production
                 if (process.env.NODE_ENV === 'production') {
-                    const fs = await import('fs');
-                    const path = await import('path');
-                    
-                    // Debug: Check what's in the puppeteer cache
-                    try {
-                        const puppeteerPath = '/opt/render/.cache/puppeteer';
-                        console.log('Checking puppeteer cache at:', puppeteerPath);
-                        const files = fs.readdirSync(puppeteerPath);
-                        console.log('Files in puppeteer cache:', files);
-                    } catch (error) {
-                        console.log('Could not read puppeteer cache:', error.message);
-                    }
-                    
-                    const executablePath = puppeteer.executablePath();
-                    console.log('Puppeteer executablePath:', executablePath);
-                    
-                    // Check if the file actually exists
-                    try {
-                        if (fs.existsSync(executablePath)) {
-                            console.log('Chrome executable found at:', executablePath);
-                            puppeteerOptions.executablePath = executablePath;
-                        } else {
-                            console.log('Chrome executable NOT found at:', executablePath);
-                            // Try to find Chrome in common locations
-                            const commonPaths = [
-                                '/usr/bin/google-chrome',
-                                '/usr/bin/google-chrome-stable',
-                                '/usr/bin/chromium-browser',
-                                '/usr/bin/chromium'
-                            ];
-                            
-                            for (const commonPath of commonPaths) {
-                                if (fs.existsSync(commonPath)) {
-                                    console.log('Found Chrome at common path:', commonPath);
-                                    puppeteerOptions.executablePath = commonPath;
-                                    break;
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        console.log('Error checking executable path:', error.message);
-                    }
+                    puppeteerOptions.executablePath = '/usr/bin/chromium-browser';
+                    console.log('Using Render system Chromium at:', puppeteerOptions.executablePath);
                 }
 
                 this.browser = await puppeteer.launch(puppeteerOptions);
