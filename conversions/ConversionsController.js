@@ -328,11 +328,12 @@ class ConversionsController {
         console.log('📝 Generating PDF using Playwright...');
         
         let browser = null;
+        let context = null;
         let page = null;
-        
+            
         try {
-            // Create a fresh browser instance for each request
-            browser = await chromium.launch({
+            // Create a completely fresh browser instance for each request
+            const launchOptions = {
                 headless: true,
                 args: [
                     '--no-sandbox',
@@ -349,9 +350,26 @@ class ConversionsController {
                     '--memory-pressure-off',
                     '--max_old_space_size=4096'
                 ]
-            });
+            };
+
+            // On Render, use system Chromium (if available) or fallback to Playwright's browser
+            if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
+                try {
+                    // Try system Chromium first (if Docker is used)
+                    launchOptions.executablePath = '/usr/bin/chromium';
+                    console.log('🐳 Using system Chromium (Render/Docker)');
+                } catch (e) {
+                    // Fallback to Playwright's bundled browser
+                    delete launchOptions.executablePath;
+                    console.log('🔄 Using Playwright bundled browser');
+                }
+            }
+
+            browser = await chromium.launch(launchOptions);
             
-            page = await browser.newPage();
+            // Create a new context and page for complete isolation
+            context = await browser.newContext();
+            page = await context.newPage();
             
             if (options.isUrl) {
                 // URL request - navigate directly
@@ -363,7 +381,7 @@ class ConversionsController {
             } else {
                 // HTML content - set content directly
                 console.log('📄 HTML content detected - setting content');
-                await page.setContent(htmlContent, { 
+            await page.setContent(htmlContent, { 
                     waitUntil: 'networkidle0',
                     timeout: 30000 
                 });
@@ -383,17 +401,24 @@ class ConversionsController {
             
             console.log(`📄 PDF generated: ${pdfBuffer.length} bytes`);
             return pdfBuffer;
-            
+
         } catch (error) {
             console.error('Error in generatePDF:', error);
             throw error;
         } finally {
-            // Always clean up
+            // Always clean up - close page, context, and browser
             if (page) {
                 try {
                     await page.close();
                 } catch (e) {
                     console.log('Page already closed');
+                }
+            }
+            if (context) {
+                try {
+                    await context.close();
+                } catch (e) {
+                    console.log('Context already closed');
                 }
             }
             if (browser) {
