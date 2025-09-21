@@ -1,7 +1,7 @@
 import InfluencersSchema from '../influencers/InfluencersSchema.js';
 import multer from 'multer';
 import cloudinary from 'cloudinary';
-import puppeteer, { Puppeteer } from 'puppeteer';
+import { chromium } from 'playwright';
 // import OpenAI from "openai"; // Disabled for deployment
 import dotenv from 'dotenv';
 import UserSchema from '../users/UserSchema.js';
@@ -820,7 +820,7 @@ const scrapeLink = async (url) => {
     let browser;
     try {
         // Launch browser with some options for better performance
-        browser = await puppeteer.launch({
+        browser = await chromium.launch({
             headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         });

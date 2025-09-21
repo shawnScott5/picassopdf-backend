@@ -30,7 +30,6 @@
         "papaparse": "^5.4.1",
         "pdf-lib": "^1.17.1",
         "playwright": "^1.49.1",
-        "puppeteer-cluster": "^0.23.0",
         "bullmq": "^5.13.2",
         "ioredis": "^5.4.1",
         "stripe": "^14.21.0",
