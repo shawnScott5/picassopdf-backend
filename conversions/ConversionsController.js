@@ -352,10 +352,10 @@ class ConversionsController {
                 ]
             };
 
-            // Use system Chromium when PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD is set (Docker/Render)
+            // Force system Chromium in Docker/Render environment
             if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
                 launchOptions.executablePath = '/usr/bin/chromium';
-                console.log('🐳 Using system Chromium (Docker/Render)');
+                console.log('🐳 Forcing system Chromium: /usr/bin/chromium');
             }
 
             browser = await chromium.launch(launchOptions);
