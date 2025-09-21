@@ -218,9 +218,8 @@ class ConversionsController {
                     ]
                 };
 
-                // Use Puppeteer's built-in executablePath (automatically finds installed Chrome)
-                puppeteerOptions.executablePath = puppeteer.executablePath();
-                console.log('Using Puppeteer Chrome at:', puppeteerOptions.executablePath);
+                // Use Puppeteer's bundled Chromium (no custom executablePath needed)
+                console.log('Using Puppeteer bundled Chromium');
 
                 this.browser = await puppeteer.launch(puppeteerOptions);
                 console.log('✅ Puppeteer browser ready - optimized for Render deployment');
