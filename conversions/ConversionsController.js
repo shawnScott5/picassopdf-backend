@@ -218,10 +218,10 @@ class ConversionsController {
                     ]
                 };
 
-                // Use Render's system Chromium in production
+                // Use Puppeteer's installed Chrome in production
                 if (process.env.NODE_ENV === 'production') {
-                    puppeteerOptions.executablePath = '/usr/bin/chromium-browser';
-                    console.log('Using Render system Chromium at:', puppeteerOptions.executablePath);
+                    puppeteerOptions.executablePath = puppeteer.executablePath();
+                    console.log('Using Puppeteer-installed Chrome at:', puppeteerOptions.executablePath);
                 }
 
                 this.browser = await puppeteer.launch(puppeteerOptions);
