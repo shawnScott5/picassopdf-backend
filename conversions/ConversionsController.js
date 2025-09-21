@@ -23,7 +23,7 @@ const __dirname = path.dirname(__filename);
 
 class ConversionsController {
     constructor() {
-        this.browser = null; // Single Puppeteer browser for everything
+        this.browser = null; // Single Playwright browser for everything
         this.pdfStoragePath = path.join(__dirname, '..', '..', 'pdfs');
         this.pdfPostProcessingService = new PDFPostProcessingService();
         this.pdfCache = new Map(); // Simple in-memory cache
@@ -359,12 +359,12 @@ class ConversionsController {
         const isUrlRequest = options.isUrl || false;
         
         if (isUrlRequest) {
-            // URL requests: Use simple Puppeteer
-            console.log('🌐 URL request detected - using Puppeteer');
+            // URL requests: Use simple Playwright
+            console.log('🌐 URL request detected - using Playwright');
             return await this.generatePDFWithPuppeteer(htmlContent, options);
         } else {
-            // HTML/CSS/JS requests: Use Puppeteer + Paged.js
-            console.log('📝 HTML content detected - using Puppeteer + Paged.js');
+            // HTML/CSS/JS requests: Use Playwright + Paged.js
+            console.log('📝 HTML content detected - using Playwright + Paged.js');
             return await this.generatePDFWithPuppeteerPagedJS(htmlContent, options);
         }
 
@@ -395,7 +395,7 @@ class ConversionsController {
 
     }
 
-    // Puppeteer + Paged.js for HTML/CSS/JS content
+    // Playwright + Paged.js for HTML/CSS/JS content
     async generatePDFWithPuppeteerPagedJS(htmlContent, options = {}) {
         let browser = null;
         let page = null;
@@ -403,7 +403,7 @@ class ConversionsController {
         try {
             browser = await this.initBrowser();
             page = await browser.newPage();
-            await page.setViewport({ width: 1200, height: 800 });
+            await page.setViewportSize({ width: 1200, height: 800 });
 
             // Inject Paged.js for advanced print layouts
             await page.addScriptTag({ 
@@ -418,11 +418,10 @@ class ConversionsController {
             const pdf = await page.pdf({
                 format: options.format || 'A4',
                 printBackground: true,
-                margin: options.margin || { top: '20px', right: '20px', bottom: '20px', left: '20px' },
-                timeout: 60000
+                margin: options.margin || { top: '20px', right: '20px', bottom: '20px', left: '20px' }
             });
 
-            console.log(`📄 Puppeteer + Paged.js PDF: ${pdf.length} bytes`);
+            console.log(`📄 Playwright + Paged.js PDF: ${pdf.length} bytes`);
             return pdf;
         } catch (error) {
             console.error('Error in generatePDFWithPuppeteerPagedJS:', error);
@@ -436,7 +435,7 @@ class ConversionsController {
         }
     }
 
-    // Simple Puppeteer for URL requests
+    // Simple Playwright for URL requests
     async generatePDFWithPuppeteer(url, options = {}) {
         const browser = await this.initBrowser();
         const page = await browser.newPage();
@@ -451,11 +450,10 @@ class ConversionsController {
             const pdf = await page.pdf({
                 format: options.format || 'A4',
                 printBackground: true,
-                margin: options.margin || { top: '20px', right: '20px', bottom: '20px', left: '20px' },
-                timeout: 30000
+                margin: options.margin || { top: '20px', right: '20px', bottom: '20px', left: '20px' }
             });
 
-            console.log(`📄 Puppeteer URL PDF: ${pdf.length} bytes`);
+            console.log(`📄 Playwright URL PDF: ${pdf.length} bytes`);
             return pdf;
         } finally {
             await page.close();
@@ -935,7 +933,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 throw new Error('Invalid URL format. URL must start with http:// or https://');
             }
 
-            // Use Puppeteer for comprehensive scraping to get rendered content
+            // Use Playwright for comprehensive scraping to get rendered content
             if (!this.browser) {
                 await this.initBrowser();
             }
