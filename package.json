@@ -68,7 +68,7 @@
         "dev": "nodemon server.js",
         "dev:debug": "nodemon --inspect server.js",
         "dev:verbose": "nodemon --verbose server.js",
-        "postinstall": "npx playwright install --with-deps"
+        "heroku-postbuild": "npx playwright install chromium"
     },
     "type": "module",
     "engines": {
