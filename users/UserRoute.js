@@ -1,5 +1,5 @@
 import express from 'express';
-import { login, register, me, forgotPassword, resetPassword, updateRevenue, updateAvatar, updateViewCount, resetViewCount, fetchMyMatches } from './UserController.js';
+import { login, register, me, forgotPassword, resetPassword, updateRevenue, updateAvatar, updateViewCount, resetViewCount, fetchMyMatches, inviteUserToCompany } from './UserController.js';
 import authenticate from '../middlewares/authenticate.js'
   
 const UserRoute = express.Router();
@@ -9,6 +9,7 @@ UserRoute.post('/register', register);
 UserRoute.post('/login', login);
 UserRoute.post('/forgot-password', forgotPassword);
 UserRoute.post('/reset-password', resetPassword);
+UserRoute.post('/invite-user', authenticate, inviteUserToCompany);
 UserRoute.patch('/update-revenue', updateRevenue);
 UserRoute.patch('/update-avatar', updateAvatar);
 UserRoute.patch('/update-view-count', updateViewCount);

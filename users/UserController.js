@@ -8,6 +8,8 @@ import UserTokenSchema from '../users/UserTokenSchema.js';
 import debounce from 'lodash.debounce';
 import Stripe from "stripe";
 import CampaignsSchema from '../campaigns/CampaignsSchema.js';
+import OrganizationSchema from '../organizations/OrganizationSchema.js';
+import CompanySchema from '../companies/CompanySchema.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
     apiVersion: '2024-04-10'
@@ -27,20 +29,29 @@ const { sign } = jwt;
 const requestIds = new Set(); // Track processed request IDs
 
 const register = async(req, res, next) => {
-    const { name, email, password, subscription, referralCode, fingerprint } = req.body;
+        const { 
+            name, 
+            email, 
+            password, 
+            subscription, 
+            referralCode, 
+            fingerprint,
+            companyName
+        } = req.body;
 
     if(!name || !email || !password) {
         return res.status(400).json({error: 'All fields are required'});
     }
 
     // Check if the fingerprint (device) already exists
-    const existingDevice = await UserSchema.findOne({ fingerprint: fingerprint });
+    const existingDevice = false //await UserSchema.findOne({ fingerprint: fingerprint });
     if (existingDevice) {
         return res.status(403).json({ error: 'Multiple accounts from the same device are not allowed' });
     }
-
+    console.log(req.body)
     const user = await UserSchema.findOne({email: email});
     if(user != null) {
+        console.log('BOOM!!!!!!!!!!!!!!!!!!!!!!!!')
         return res.status(400).json({error: 'User already exists'});
     }
 
@@ -52,11 +63,54 @@ const register = async(req, res, next) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const nextPaymentDate = new Date(); // Get current local time
         nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1); // Add 1 month
-        const newUser  = await UserSchema.create({
+
+        // Create company first if companyName is provided
+        let company = null;
+        let companyId = null;
+        
+        if (companyName) {
+            try {
+                // Create a new company document first
+                company = new CompanySchema({
+                    name: companyName.trim(),
+                    description: `Company: ${companyName}`,
+                    contactEmail: email,
+                    // We'll update createdBy and lastModifiedBy after user creation
+                    members: []
+                });
+
+                await company.save();
+                companyId = company._id;
+            } catch (companyError) {
+                console.error('Error creating company:', companyError);
+                return res.status(500).json({error: 'Failed to create company'});
+            }
+        } else {
+            // For personal accounts, create a default company or use a placeholder
+            // For now, we'll create a personal company
+            try {
+                company = new CompanySchema({
+                    name: `${name}'s Personal Account`,
+                    description: `Personal account for ${name}`,
+                    contactEmail: email,
+                    members: []
+                });
+
+                await company.save();
+                companyId = company._id;
+            } catch (companyError) {
+                console.error('Error creating personal company:', companyError);
+                return res.status(500).json({error: 'Failed to create personal account'});
+            }
+        }
+
+        // Now create the user with the companyId
+        const newUser = await UserSchema.create({
             name,
             email,
             password: hashedPassword,
             subscription: subscription,
+            companyId: companyId, // Set the companyId from the created company
             previousSubscriptionStartDate: new Date().toLocaleString('en-US', {
                 month: 'numeric',
                 day: 'numeric',
@@ -98,17 +152,50 @@ const register = async(req, res, next) => {
             referralCode: referralCode,
             influencersEmailViewedCount: 0,
             influencersEmailViewed: [],
-            fingerprint: fingerprint
+            fingerprint: fingerprint,
+            // Company field
+            companyName: companyName,
+            accountType: companyName ? 'company' : 'personal',
+            role: 'owner' // Set as owner since they created the company
         });
+
+        // Update the company with the user as owner
+        if (company) {
+            try {
+                await CompanySchema.findByIdAndUpdate(company._id, {
+                    createdBy: newUser._id,
+                    lastModifiedBy: newUser._id,
+                    $push: {
+                        members: {
+                            userId: newUser._id,
+                            role: 'owner',
+                            permissions: ['url_to_pdf', 'html_to_pdf', 'file_upload', 'api_access', 'team_management', 'billing_management', 'analytics_view'],
+                            joinedAt: new Date(),
+                            status: 'active'
+                        }
+                    }
+                });
+            } catch (companyUpdateError) {
+                console.error('Error updating company with user:', companyUpdateError);
+                // Continue even if company update fails
+            }
+        }
+
         return res.status(201).json({
             status: true,
             message: 'User created',
             data: {
                 _id: newUser._id,
-                email: newUser.email
+                email: newUser.email,
+                accountType: newUser.accountType,
+                company: company ? {
+                    _id: company._id,
+                    name: company.name
+                } : null
             }
         });
     } catch (error) {
+        console.log('ERROR:', error)
         return res.status(500).json({error: 'Something went wrong'});
     }
 }
@@ -286,6 +373,11 @@ const me = async(req, res, next) => {
                 _id: finalUser._id,
                 email: finalUser.email,
                 name: finalUser.name,
+                organizationId: finalUser.organizationId,
+                companyId: finalUser.companyId,
+                companyName: finalUser.companyName,
+                accountType: finalUser.accountType,
+                role: finalUser.role,
                 thisMonthRecurringRevenue: finalUser.thisMonthRecurringRevenue,
                 thisMonthTotalRevenue: finalUser.thisMonthTotalRevenue,
                 thisMonthTotalClients: finalUser.thisMonthTotalClients,
@@ -515,4 +607,131 @@ const updateAvatar = async (req, res) => {
 }
   
 
-export { register, login, me, forgotPassword, resetPassword, updateRevenue, updateAvatar, updateViewCount, resetViewCount, fetchMyMatches };
+const inviteUserToCompany = async (req, res, next) => {
+    try {
+        const { fullName, email, companyName, permissions } = req.body;
+        const currentUserId = req.userId; // From auth middleware
+
+        // Validate required fields
+        if (!fullName || !email || !companyName) {
+            return res.status(400).json({
+                success: false,
+                message: 'Full name, email, and company name are required'
+            });
+        }
+
+        // Get current user to verify they have company access
+        const currentUser = await UserSchema.findById(currentUserId);
+        if (!currentUser || !currentUser.companyId) {
+            return res.status(403).json({
+                success: false,
+                message: 'You must be part of a company to invite users'
+            });
+        }
+
+        // Check if user already exists
+        const existingUser = await UserSchema.findOne({ email: email });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'User with this email already exists'
+            });
+        }
+
+        // Get the organization
+        const organization = await OrganizationSchema.findById(currentUser.companyId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found'
+            });
+        }
+
+        // Create a temporary password (user will need to reset it)
+        const tempPassword = Math.random().toString(36).slice(-8);
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+        // Create the new user
+        const newUser = await UserSchema.create({
+            name: fullName,
+            email: email,
+            password: hashedPassword,
+            companyId: currentUser.companyId,
+            role: 'member',
+            accountType: 'company',
+            companyName: companyName,
+            subscription: { type: 'FREE' },
+            // Set other required fields with defaults
+            subscriptionStartDate: new Date().toLocaleString('en-US', {
+                month: 'numeric',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true,
+            }),
+            nextPaymentDate: new Date().toLocaleString('en-US', {
+                month: 'numeric',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true,
+            }),
+            thisMonthName: new Date().toLocaleDateString('en-US', { month: 'long' }),
+            lastMonthName: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long' }),
+            influencersEmailViewedCount: 0,
+            influencersEmailViewed: [],
+            admin: false,
+            avatar: '',
+            stripeSessionId: '',
+            stripeSubscriptionId: '',
+            tempViewLimit: 0,
+            lastMonthRecurringRevenue: 0,
+            lastMonthTotalRevenue: 0,
+            lastMonthNewClients: 0,
+            lastMonthTotalClients: 0,
+            thisMonthRecurringRevenue: 0,
+            thisMonthTotalRevenue: 0,
+            thisMonthNewClients: 0,
+            thisMonthTotalClients: 0
+        });
+
+        // Add user to organization members
+        organization.members.push({
+            userId: newUser._id,
+            role: 'member',
+            joinedAt: new Date(),
+            status: 'active',
+            permissions: permissions || ['pdf_conversion', 'html_to_pdf']
+        });
+
+        await organization.save();
+
+        // TODO: Send invitation email with temporary password
+        // For now, we'll just return success
+
+        return res.status(201).json({
+            success: true,
+            message: 'User invited successfully',
+            data: {
+                _id: newUser._id,
+                name: newUser.name,
+                email: newUser.email,
+                role: newUser.role,
+                organizationId: newUser.organizationId
+            }
+        });
+
+    } catch (error) {
+        console.error('Error inviting user:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Something went wrong while inviting the user'
+        });
+    }
+};
+
+export { register, login, me, forgotPassword, resetPassword, updateRevenue, updateAvatar, updateViewCount, resetViewCount, fetchMyMatches, inviteUserToCompany };

@@ -21,37 +21,140 @@ import path from 'path';
 import url from 'url';
 import SubscribeStripeScaleRoute from './subscribe-stripe-scale/SubscribeStripeScaleRoute.js';
 import SubscribeStripeRoute from './subscribe-stripe/SubscribeStripeRoute.js';
+import SubscribeStripeCustomRoute from './subscribe-stripe-custom/SubscribeStripeCustomRoute.js';
+import AudiobookRoute from './audiobooks/AudiobookRoute.js';
+import ConversionsRoute from './conversions/ConversionsRoute.js';
+import LogsRoute from './conversions/LogsRoute.js';
+import ApiKeysRoute from './api-keys/ApiKeysRoute.js';
+import OrganizationRoute from './organizations/OrganizationRoute.js';
+import conversionsController from './conversions/ConversionsController.js';
+import apiKeyAuth from './middlewares/apiKeyAuth.js';
 
 const app = express();
-const allowedOrigins = ['https://app.distros.io'];
 const PORT = process.env.PORT || 3000;
 
 // Get the directory name of the current module
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
-// Enable proxy to correctly handle HTTPS redirection in Heroku
-app.enable('trust proxy');
+// Performance optimizations
+app.set('trust proxy', 1);
+app.use(helmet({
+    contentSecurityPolicy: false, // Disable CSP for API endpoints
+    crossOriginEmbedderPolicy: false
+}));
 
-// Middleware to force HTTPS in production (for Heroku)
-app.use((req, res, next) => {
-    if (req.secure) {
-        return next();  // Continue if the request is already HTTPS
-    } else {
-        res.redirect('https://' + req.headers.host + req.url);  // Redirect to HTTPS
+// Middleware with performance optimizations
+app.use(express.json({ 
+    limit: '50mb', // Reduced from 1gb for better memory management
+    parameterLimit: 50000,
+    extended: true
+}));
+app.use(express.urlencoded({ 
+    limit: '50mb', 
+    extended: true,
+    parameterLimit: 50000
+}));
+app.use(fileupload({
+    useTempFiles: true,
+    tempFileDir: '/tmp/',
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+    abortOnLimit: true,
+    createParentPath: true
+}));
+
+// CORS with performance optimizations
+app.use(cors({
+    origin: process.env.NODE_ENV === 'production' ? 
+        ['https://picassopdf.com', 'https://www.picassopdf.com'] : 
+        true,
+    credentials: true,
+    optionsSuccessStatus: 200,
+    maxAge: 86400 // Cache preflight for 24 hours
+}));
+
+app.use(bodyParser.json({
+    limit: '50mb',
+    parameterLimit: 50000
+}));
+
+// V1 API Routes - Direct routes to avoid Express router conflicts
+
+app.post('/v1/convert/pdf', apiKeyAuth, async (req, res, next) => {
+    const timeout = setTimeout(() => {
+        if (!res.headersSent) {
+            res.status(408).json({
+                success: false,
+                message: 'Request timeout - PDF generation took too long',
+                error: 'TIMEOUT'
+            });
+        }
+    }, 60000);
+
+    try {
+        await conversionsController.convertHTMLToPDFAPIPublic(req, res, next);
+        clearTimeout(timeout);
+    } catch (error) {
+        clearTimeout(timeout);
+        if (error.name === 'TimeoutError') {
+            if (!res.headersSent) {
+                return res.status(408).json({
+                    success: false,
+                    message: 'PDF generation timed out',
+                    error: 'TIMEOUT'
+                });
+            }
+        } else if (error.message && error.message.includes('memory')) {
+            if (!res.headersSent) {
+                return res.status(507).json({
+                    success: false,
+                    message: 'Insufficient memory to process request',
+                    error: 'MEMORY_ERROR'
+                });
+            }
+        }
+        next(error);
     }
 });
 
-// Middleware
-app.use(express.json({ limit: '1gb' }));
-app.use(express.urlencoded({ limit: '1gb', extended: true }));
-app.use(fileupload({useTempFiles: true}))
-app.use(cors({
-    origin: allowedOrigins,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true  // Allows sending cookies or authentication headers if needed
-}));
-app.use(bodyParser.json());
+app.get('/v1/status', async (req, res) => {
+    try {
+        const memUsage = process.memoryUsage();
+        const uptime = process.uptime();
+        
+        let clusterStatus = 'Not initialized';
+        if (conversionsController.cluster) {
+            clusterStatus = `Active (${conversionsController.cluster.workersByBrowser.size} workers)`;
+        }
+        
+        const cacheStats = {
+            size: conversionsController.pdfCache?.size || 0,
+            maxSize: conversionsController.maxCacheSize || 0,
+            hitRate: 'N/A'
+        };
+        
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            uptime: `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m ${Math.floor(uptime % 60)}s`,
+            memory: {
+                used: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
+                total: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
+                external: `${Math.round(memUsage.external / 1024 / 1024)}MB`,
+                rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`
+            },
+            cluster: clusterStatus,
+            cache: cacheStats,
+            version: '1.0.0'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get server status',
+            error: error.message
+        });
+    }
+});
+
 app.use('/api/actions', ActionsRoute);
 app.use('/api/admin', AdminRoute);
 app.use('/api/campaigns', CampaingsRoute);
@@ -65,17 +168,78 @@ app.use('/api/uploads', UploadsRoute);
 app.use('/api/subscribe', SubscribeRoute);
 app.use('/api/subscribe-stripe-pro', SubscribeStripeRoute);
 app.use('/api/subscribe-stripe-scale', SubscribeStripeScaleRoute);
+app.use('/api/subscribe-stripe-custom', SubscribeStripeCustomRoute);
+app.use('/api/audiobooks', AudiobookRoute);
+app.use('/api/conversions', ConversionsRoute);
+app.use('/api/logs', LogsRoute);
+app.use('/api/api-keys', ApiKeysRoute);
+app.use('/api/organizations', OrganizationRoute);
 
 // Serve static files from Angular's `dist` folder
-app.use(express.static(path.join(__dirname, '..', 'distros-frontend', 'dist', 'distros-frontend')));
+app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist', 'frontend')));
 
-// Handle all other routes by redirecting to `index.html`
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'distros-frontend', 'dist', 'distros-frontend', 'index.html'));
+// Handle all other routes by redirecting to `index.html` (but skip API routes)
+app.get('*', (req, res, next) => {
+    // Skip API routes
+    if (req.path.startsWith('/v1/') || req.path.startsWith('/api/')) {
+        return next();
+    }
+    res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'frontend', 'index.html'));
 });
 
 // Connect to the database
 db();
 
 // Start the server
-app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+const server = app.listen(PORT, () => {
+    console.log(`🚀 PicassoPDF API Server running on port ${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔧 Process ID: ${process.pid}`);
+    console.log(`💾 Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
+});
+
+// Graceful shutdown handling
+process.on('SIGTERM', async () => {
+    console.log('🛑 SIGTERM received, shutting down gracefully...');
+    
+    server.close(() => {
+        console.log('✅ HTTP server closed');
+        
+        // Close database connection
+        mongoose.connection.close(false, () => {
+            console.log('✅ MongoDB connection closed');
+            process.exit(0);
+        });
+    });
+    
+    // Force close after 30 seconds
+    setTimeout(() => {
+        console.log('❌ Forced shutdown after timeout');
+        process.exit(1);
+    }, 30000);
+});
+
+process.on('SIGINT', async () => {
+    console.log('🛑 SIGINT received, shutting down gracefully...');
+    
+    server.close(() => {
+        console.log('✅ HTTP server closed');
+        
+        // Close database connection
+        mongoose.connection.close(false, () => {
+            console.log('✅ MongoDB connection closed');
+            process.exit(0);
+        });
+    });
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+    console.error('❌ Uncaught Exception:', err);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+    process.exit(1);
+});

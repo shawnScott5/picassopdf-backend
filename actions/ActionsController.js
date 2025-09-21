@@ -15,6 +15,11 @@ const getMyNotes = async(req, res, next) => {
 
 }
 
+const convertToPDF = async(req, res, next) => {
+    const form = req.body;
+    console.log('FORM:', form);
+}
+
 const createNewNote = async(req, res, next) => {
      const form = req.body;
 
@@ -124,4 +129,4 @@ const updateNote = async(req, res, next) => {
 
 }
 
-export { createNewNote, getMyNotes, deleteNote, updateNote, reportBug, featureSuggestion };
+export { createNewNote, convertToPDF, getMyNotes, deleteNote, updateNote, reportBug, featureSuggestion };
