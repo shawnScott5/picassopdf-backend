@@ -2,7 +2,6 @@ import ConversionsSchema from './ConversionsSchema.js';
 import LogsSchema from './LogsSchema.js';
 import UserSchema from '../users/UserSchema.js';
 import PDFPostProcessingService from '../services/PDFPostProcessingService.js';
-import PDFLibService from '../services/PDFLibService.js';
 import { chromium } from 'playwright';
 import axios from 'axios';
 import fs from 'fs';
@@ -27,7 +26,6 @@ class ConversionsController {
         this.browser = null; // Single Playwright browser for everything
         this.pdfStoragePath = path.join(__dirname, '..', '..', 'pdfs');
         this.pdfPostProcessingService = new PDFPostProcessingService();
-        this.pdfLibService = new PDFLibService();
         this.pdfCache = new Map(); // Simple in-memory cache
         this.maxCacheSize = 100; // Maximum number of cached PDFs
         this.cacheExpiry = 10 * 60 * 1000; // 10 minutes
@@ -50,7 +48,8 @@ class ConversionsController {
     async initBrowser() {
         if (!this.browser) {
             try {
-                this.browser = await chromium.launch({
+                // Use system-installed Chromium on Render/Docker
+                const launchOptions = {
                     headless: true,
                     args: [
                         '--no-sandbox',
@@ -67,7 +66,15 @@ class ConversionsController {
                         '--memory-pressure-off',
                         '--max_old_space_size=4096'
                     ]
-                });
+                };
+
+                // On Render/Docker, use system Chromium
+                if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
+                    launchOptions.executablePath = '/usr/bin/chromium';
+                    console.log('🐳 Using system-installed Chromium (Docker/Render)');
+                }
+
+                this.browser = await chromium.launch(launchOptions);
                 console.log('✅ Playwright browser ready - optimized for Render deployment');
             } catch (error) {
                 console.error('Playwright browser failed:', error);
@@ -317,7 +324,7 @@ class ConversionsController {
                         waitUntil: 'networkidle0',
                         timeout: 30000 
                     });
-                } else {
+        } else {
                     // HTML content - set content directly
                     console.log('📄 HTML content detected - setting content');
                     await page.setContent(htmlContent, { 
@@ -1070,8 +1077,8 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
 
     async renderHTMLToPDF(html, css, options = {}) {
         try {
-            // Use PDFLibService for PDF generation (no browser needed)
-            const pdfBuffer = await this.pdfLibService.generatePDFFromHTML(html, options);
+            // Use Playwright for PDF generation with full HTML/CSS/JS rendering
+            const pdfBuffer = await this.generatePDF(html, options);
             return pdfBuffer;
         } catch (error) {
             console.error('HTML to PDF rendering error:', error);
@@ -1704,33 +1711,10 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             // Prepare HTML content
             let htmlContent;
             if (hasUrl) {
-                // For URLs, we need to fetch and process separately
-                // Use simple fetch for URL content (no cluster needed)
-                try {
-                        await page.goto(data.url, { 
-                            waitUntil: 'domcontentloaded',
-                            timeout: 20000 
-                        });
-                        return await page.content();
-                    });
+                // For URLs, we'll let the generatePDF method handle navigation directly
+                htmlContent = url; // Pass the URL directly
                 } else {
-                    // Fallback to single browser
-                    if (!this.browser) {
-                        await this.initBrowser();
-                    }
-                    const page = await this.browser.newPage();
-                    try {
-                        await page.goto(url, { 
-                            waitUntil: 'domcontentloaded',
-                            timeout: 20000 
-                        });
-                        htmlContent = await page.content();
-                    } finally {
-                        await page.close();
-                    }
-                }
-            } else {
-                // Use provided HTML
+                // Use provided HTML content
                 htmlContent = html;
                 
                 // Inject custom CSS if provided
