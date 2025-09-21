@@ -218,11 +218,9 @@ class ConversionsController {
                     ]
                 };
 
-                // Use Puppeteer's installed Chrome in production
-                if (process.env.NODE_ENV === 'production') {
-                    puppeteerOptions.executablePath = puppeteer.executablePath();
-                    console.log('Using Puppeteer-installed Chrome at:', puppeteerOptions.executablePath);
-                }
+                // Use Puppeteer's built-in executablePath (automatically finds installed Chrome)
+                puppeteerOptions.executablePath = puppeteer.executablePath();
+                console.log('Using Puppeteer Chrome at:', puppeteerOptions.executablePath);
 
                 this.browser = await puppeteer.launch(puppeteerOptions);
                 console.log('✅ Puppeteer browser ready - optimized for Render deployment');
