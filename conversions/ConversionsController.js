@@ -3,6 +3,7 @@ import LogsSchema from './LogsSchema.js';
 import UserSchema from '../users/UserSchema.js';
 import PDFPostProcessingService from '../services/PDFPostProcessingService.js';
 import PDFLibService from '../services/PDFLibService.js';
+import { chromium } from 'playwright';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
@@ -23,6 +24,7 @@ const __dirname = path.dirname(__filename);
 
 class ConversionsController {
     constructor() {
+        this.browser = null; // Single Playwright browser for everything
         this.pdfStoragePath = path.join(__dirname, '..', '..', 'pdfs');
         this.pdfPostProcessingService = new PDFPostProcessingService();
         this.pdfLibService = new PDFLibService();
@@ -32,7 +34,7 @@ class ConversionsController {
         this.queueService = null; // Will be initialized conditionally
         this.ensurePDFDirectory();
         this.initializeR2();
-        // Don't initialize browser in constructor - do it lazily when needed
+        // Initialize Playwright browser for full HTML/CSS/JS rendering
         this.initQueue();
     }
 
@@ -45,11 +47,41 @@ class ConversionsController {
         }
     }
 
+    async initBrowser() {
+        if (!this.browser) {
+            try {
+                this.browser = await chromium.launch({
+                    headless: true,
+                    args: [
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--disable-web-security',
+                        '--disable-features=VizDisplayCompositor',
+                        '--single-process',
+                        '--no-zygote',
+                        '--disable-background-timer-throttling',
+                        '--disable-backgrounding-occluded-windows',
+                        '--disable-renderer-backgrounding',
+                        '--memory-pressure-off',
+                        '--max_old_space_size=4096'
+                    ]
+                });
+                console.log('✅ Playwright browser ready - optimized for Render deployment');
+            } catch (error) {
+                console.error('Playwright browser failed:', error);
+                throw error;
+            }
+        }
+        return this.browser;
+    }
+
     initializeR2() {
         try {
             console.log('R2 initialization disabled for deployment');
-            this.r2Enabled = false;
-            return;
+                this.r2Enabled = false;
+                return;
         } catch (error) {
             console.error('Error initializing R2:', error);
             this.r2Enabled = false;
@@ -211,71 +243,6 @@ class ConversionsController {
         }
     }
 
-    /**
-     * Calculate optimal browser count based on available system resources
-     * AWS effectively controls this through container sizing and resource allocation
-     */
-    calculateOptimalBrowserCount() {
-        try {
-            // Get system memory info (Heroku provides MEMORY_AVAILABLE)
-            const totalMemoryGB = process.env.MEMORY_AVAILABLE ? 
-                parseInt(process.env.MEMORY_AVAILABLE) / 1024 : // Heroku provides memory in MB
-                os.totalmem() / (1024 * 1024 * 1024); // Convert to GB
-
-            // Get CPU info (Heroku provides WEB_CONCURRENCY)
-            const cpuCount = process.env.WEB_CONCURRENCY || os.cpus().length;
-
-            // Calculate optimal browsers based on resources
-            // Each browser needs ~150-200MB RAM and ~0.3 CPU (optimized for PDF generation)
-            const maxBrowsersByMemory = Math.floor((totalMemoryGB * 1024) / 180); // 180MB per browser (more efficient)
-            const maxBrowsersByCPU = Math.floor(cpuCount / 0.3); // 0.3 CPU per browser (PDF generation is I/O bound)
-            
-            // Take the more conservative limit
-            const resourceBasedLimit = Math.min(maxBrowsersByMemory, maxBrowsersByCPU);
-            
-            // Apply environment-based scaling factor
-            let scalingFactor = 1;
-            if (process.env.NODE_ENV === 'production') {
-                scalingFactor = 0.8; // Use 80% of available resources in production for stability
-            } else {
-                scalingFactor = 0.5; // Use 50% in development
-            }
-            
-            const calculatedConcurrency = Math.floor(resourceBasedLimit * scalingFactor);
-            
-            // Allow manual override if specified
-            const manualOverride = parseInt(process.env.MAX_CLUSTER_CONCURRENCY);
-            if (manualOverride && manualOverride > 0) {
-                console.log(`🎛️ Manual browser override: ${manualOverride} (calculated: ${calculatedConcurrency})`);
-                return manualOverride;
-            }
-            
-            // Ensure minimum of 1 browser, maximum reasonable limit (much lower)
-            const finalConcurrency = Math.max(1, Math.min(calculatedConcurrency, 10));
-            
-            console.log(`🧮 Auto-calculated browser count: ${finalConcurrency}`);
-            console.log(`📊 Based on: ${totalMemoryGB.toFixed(1)}GB RAM, ${cpuCount} vCPU`);
-            console.log(`🔧 Memory limit: ${maxBrowsersByMemory}, CPU limit: ${maxBrowsersByCPU}`);
-            console.log(`💡 Heroku/system resources control this dynamically`);
-            
-            return finalConcurrency;
-            
-        } catch (error) {
-            console.error('Error calculating optimal browser count:', error);
-            // Fallback to environment variable or dynamic default based on environment
-            const envOverride = parseInt(process.env.MAX_CLUSTER_CONCURRENCY);
-            if (envOverride) return envOverride;
-            
-            // Dynamic fallback based on environment
-            if (process.env.NODE_ENV === 'production') {
-                // In production, be more conservative
-                return Math.min(Math.floor(os.cpus().length * 0.5), 5);
-            } else {
-                // In development, use minimal resources
-                return 2;
-            }
-        }
-    }
 
     /**
      * Generate cache key for PDF content
@@ -335,20 +302,48 @@ class ConversionsController {
             }
         }
 
-        // Use PDFLibService for all PDF generation
-        console.log('📝 Generating PDF using pdf-lib...');
+        // Use Playwright for full HTML/CSS/JS rendering
+        console.log('📝 Generating PDF using Playwright...');
         
         try {
-            // If it's a URL, fetch the content first
-            if (options.isUrl) {
-                console.log('🌐 URL request detected - fetching content first');
-                const response = await axios.get(htmlContent, { timeout: 15000 });
-                htmlContent = response.data;
-            }
+            const browser = await this.initBrowser();
+            const page = await browser.newPage();
             
-            // Generate PDF using pdf-lib
-            const pdfBuffer = await this.pdfLibService.generatePDFFromHTML(htmlContent, options);
-            return pdfBuffer;
+            try {
+                if (options.isUrl) {
+                    // URL request - navigate directly
+                    console.log('🌐 URL request detected - navigating to URL');
+                    await page.goto(htmlContent, { 
+                        waitUntil: 'networkidle0',
+                        timeout: 30000 
+                    });
+                } else {
+                    // HTML content - set content directly
+                    console.log('📄 HTML content detected - setting content');
+                    await page.setContent(htmlContent, { 
+                        waitUntil: 'networkidle0',
+                        timeout: 30000 
+                    });
+                }
+                
+                // Generate PDF
+                const pdfBuffer = await page.pdf({
+                    format: options.format || 'A4',
+                    printBackground: true,
+                    margin: options.margin || {
+                        top: '20px',
+                        right: '20px',
+                        bottom: '20px',
+                        left: '20px'
+                    }
+                });
+                
+                console.log(`📄 PDF generated: ${pdfBuffer.length} bytes`);
+                return pdfBuffer;
+                
+            } finally {
+                await page.close();
+            }
         } catch (error) {
             console.error('Error in generatePDFWithCluster:', error);
             throw error;
@@ -383,139 +378,10 @@ class ConversionsController {
 
 
 
-    /**
-     * Render HTML with JavaScript and extract final DOM for Gemini analysis
-     * Using Playwright for better performance and scaling
-     */
-    async renderHTMLWithJavaScript(htmlContent) {
-        let browser = null;
-        let context = null;
-        try {
-            console.log('Rendering HTML with JavaScript using Playwright...');
-            
-            // Optimized browser launch for better performance and scaling
-            browser = await chromium.launch({
-                headless: true,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--disable-gpu',
-                    '--disable-web-security',
-                    '--disable-features=VizDisplayCompositor',
-                    '--disable-background-timer-throttling',
-                    '--disable-backgrounding-occluded-windows',
-                    '--disable-renderer-backgrounding',
-                    '--disable-extensions',
-                    '--disable-plugins',
-                    '--disable-images', // Skip images for faster rendering
-                    '--disable-javascript-harmony-shipping',
-                    '--memory-pressure-off'
-                ]
-            });
-
-            // Create context with optimized settings for concurrent jobs
-            context = await browser.newContext({
-                viewport: { width: 1200, height: 800 },
-                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                // Disable images and other resources for faster rendering
-                ignoreHTTPSErrors: true,
-                bypassCSP: true
-            });
-
-            const page = await context.newPage();
-            
-            // Optimize page settings for performance
-            await page.route('**/*', (route) => {
-                const resourceType = route.request().resourceType();
-                // Block unnecessary resources for faster rendering
-                if (['image', 'font', 'media'].includes(resourceType)) {
-                    route.abort();
-                } else {
-                    route.continue();
-                }
-            });
-            
-            // Load the HTML content with optimized settings
-            await page.setContent(htmlContent, { 
-                waitUntil: 'domcontentloaded', // Faster than networkidle
-                timeout: 20000 // Reduced timeout for better performance
-            });
-
-            // Wait for any delayed JavaScript execution (reduced time)
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            // Extract the final rendered HTML and computed styles
-            const renderedData = await page.evaluate(() => {
-                // Get the final HTML after JavaScript execution
-                const finalHTML = document.documentElement.outerHTML;
-                
-                // Extract computed styles for all elements (optimized)
-                const computedStyles = {};
-                const allElements = document.querySelectorAll('*');
-                
-                // Limit the number of elements to analyze for performance
-                const maxElements = Math.min(allElements.length, 100);
-                
-                for (let i = 0; i < maxElements; i++) {
-                    const element = allElements[i];
-                    const styles = window.getComputedStyle(element);
-                    const elementId = element.id || element.className || `element-${i}`;
-                    
-                    // Store only essential CSS properties that affect layout
-                    computedStyles[elementId] = {
-                        display: styles.display,
-                        position: styles.position,
-                        width: styles.width,
-                        height: styles.height,
-                        overflow: styles.overflow,
-                        visibility: styles.visibility
-                    };
-                }
-
-                return {
-                    html: finalHTML,
-                    computedStyles: computedStyles,
-                    bodyText: document.body ? document.body.innerText.substring(0, 1000) : '', // Limit text length
-                    hasErrors: document.querySelectorAll('[style*="error"], .error, #error').length > 0,
-                    elementCount: allElements.length
-                };
-            });
-
-            await context.close();
-            await browser.close();
-            browser = null;
-            context = null;
-
-            console.log(`HTML rendered successfully with Playwright (${renderedData.elementCount} elements analyzed)`);
-            return renderedData;
-
-        } catch (error) {
-            console.error('Error rendering HTML with JavaScript:', error.message);
-            if (context) {
-                try {
-                    await context.close();
-                } catch (closeError) {
-                    console.error('Error closing context:', closeError.message);
-                }
-            }
-            if (browser) {
-                try {
-                    await browser.close();
-                } catch (closeError) {
-                    console.error('Error closing browser:', closeError.message);
-                }
-            }
-            throw error;
-        }
-    }
 
     /**
      * Check HTML for broken layouts using Gemini Flash API
-     * First renders HTML with JavaScript, then analyzes the final DOM
+     * Simplified version without browser rendering
      */
     async checkHTMLWithGemini(htmlContent) {
         try {
@@ -586,16 +452,15 @@ IMPORTANT: Respond with ONLY the corrected HTML code. Do not include any markdow
                 }
             }
 
-            // Step 2: For structurally sound HTML, render with JavaScript and analyze layout
-            console.log('Step 2: Rendering HTML with JavaScript...');
-            const renderedData = await this.renderHTMLWithJavaScript(htmlContent);
+            // Step 2: Analyze HTML structure (no browser rendering needed)
+            console.log('Step 2: Analyzing HTML structure...');
             
-            // Step 3: Analyze the rendered HTML with Gemini for layout issues
-            console.log('Step 3: Analyzing rendered HTML with Gemini...');
+            // Step 3: Analyze the HTML with Gemini for layout issues
+            console.log('Step 3: Analyzing HTML with Gemini...');
             
-            const prompt = `Please analyze this HTML code that has been rendered with JavaScript for potential broken layouts, missing CSS, or structural issues that could cause rendering problems in PDF generation. 
+            const prompt = `Please analyze this HTML code for potential broken layouts, missing CSS, or structural issues that could cause rendering problems in PDF generation. 
 
-The HTML below represents the final state after JavaScript execution. Focus on:
+Focus on:
 1. Layout issues that might not render properly in PDF
 2. Missing or broken CSS that could cause layout problems
 3. Elements with problematic positioning (absolute, fixed)
@@ -831,76 +696,20 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 throw new Error('Invalid URL format. URL must start with http:// or https://');
             }
 
-            // Use Playwright for comprehensive scraping to get rendered content
-            if (!this.browser) {
-                await this.initBrowser();
-            }
-
-            const page = await this.browser.newPage();
+            // Use simple fetch for URL scraping (no browser needed)
+            const response = await axios.get(url, { timeout: 15000 });
+            const htmlContent = response.data;
             
-            // Set user agent to avoid blocking
-            await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-            
-            // Set viewport
-            await page.setViewport({ width: 1200, height: 800 });
-
-            // Enable request interception to capture CSS and JS
-            await page.setRequestInterception(true);
+            // Simple HTML content extraction (no browser needed)
             
             const resources = {
                 css: [],
                 js: [],
-                html: ''
+                html: htmlContent
             };
             
-            // Intercept requests to collect CSS and JS files
-            page.on('request', request => {
-                request.continue();
-            });
-            
-            page.on('response', async response => {
-                const url = response.url();
-                const contentType = response.headers()['content-type'] || '';
-                
-                try {
-                    // Collect CSS files
-                    if (contentType.includes('text/css') || url.endsWith('.css')) {
-                        const cssContent = await response.text();
-                        resources.css.push({
-                            url: url,
-                            content: cssContent
-                        });
-                    }
-                    
-                    // Collect JavaScript files
-                    if (contentType.includes('javascript') || contentType.includes('application/javascript') || url.endsWith('.js')) {
-                        const jsContent = await response.text();
-                        resources.js.push({
-                            url: url,
-                            content: jsContent
-                        });
-                    }
-                } catch (error) {
-                    console.warn(`Failed to capture resource ${url}:`, error.message);
-                }
-            });
-
-            // Navigate to the page and wait for it to load
-            console.log('Navigating to page...');
-            await page.goto(url, { 
-                waitUntil: 'networkidle0', 
-                timeout: 30000 
-            });
-
-            // Wait a bit more for dynamic content
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // Get the fully rendered HTML
-            console.log('Extracting HTML content...');
-            const html = await page.content();
-            
             // Parse HTML with Cheerio for additional processing
-            const $ = cheerio.load(html);
+            const $ = cheerio.load(htmlContent);
             
             // Extract inline CSS
             const inlineCss = [];
@@ -941,20 +750,12 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                     $(elem).attr('href', absoluteUrl);
                 }
             });
-
-            await page.close();
             
             // Combine all CSS
-            const allCss = [
-                ...inlineCss,
-                ...resources.css.map(css => css.content)
-            ].join('\n\n');
+            const allCss = inlineCss.join('\n\n');
             
             // Combine all JavaScript
-            const allJs = [
-                ...inlineJs,
-                ...resources.js.map(js => js.content)
-            ].join('\n\n');
+            const allJs = inlineJs.join('\n\n');
             
             const cleanHtml = $.html();
             
@@ -1269,11 +1070,9 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
 
     async renderHTMLToPDF(html, css, options = {}) {
         try {
-            if (!this.browser) {
-                await this.initBrowser();
-            }
-
-            const page = await this.browser.newPage();
+            // Use PDFLibService for PDF generation (no browser needed)
+            const pdfBuffer = await this.pdfLibService.generatePDFFromHTML(html, options);
+            return pdfBuffer;
             
             // Enhanced viewport for better rendering
             await page.setViewport({ 
