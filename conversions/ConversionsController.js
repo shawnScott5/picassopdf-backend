@@ -32,7 +32,7 @@ class ConversionsController {
         this.queueService = null; // Will be initialized conditionally
         this.ensurePDFDirectory();
         this.initializeR2();
-        this.initBrowser(); // Single browser per dyno
+        // Don't initialize browser in constructor - do it lazily when needed
         this.initQueue();
     }
 
@@ -385,12 +385,12 @@ class ConversionsController {
             }
         }
 
+        // Lazy browser initialization - only when needed for PDF generation
         if (!this.browser) {
             await this.initBrowser();
-        }
-
-        if (!this.browser) {
-            throw new Error('Browser not initialized');
+            if (!this.browser) {
+                throw new Error('Browser failed to initialize');
+            }
         }
 
         const pdfOptions = {
@@ -437,15 +437,15 @@ class ConversionsController {
 
                 // Generate PDF
                 const pdf = await page.pdf(pdfOptions);
-                
-                // Cache the result (skip for URLs)
-                if (!options.isUrl) {
-                    const cacheKey = this.generateCacheKey(htmlContent, options);
-                    this.cachePDF(cacheKey, pdf);
-                }
+
+            // Cache the result (skip for URLs)
+            if (!options.isUrl) {
+                const cacheKey = this.generateCacheKey(htmlContent, options);
+                this.cachePDF(cacheKey, pdf);
+            }
 
                 console.log(`📄 PDF generated: ${pdf.length} bytes`);
-                return pdf;
+            return pdf;
             } finally {
                 await context.close(); // Playwright context cleanup
             }
