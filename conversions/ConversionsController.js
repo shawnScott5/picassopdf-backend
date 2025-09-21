@@ -2,7 +2,6 @@ import ConversionsSchema from './ConversionsSchema.js';
 import LogsSchema from './LogsSchema.js';
 import UserSchema from '../users/UserSchema.js';
 import PDFPostProcessingService from '../services/PDFPostProcessingService.js';
-import { chromium } from 'playwright';
 import puppeteer from 'puppeteer';
 import axios from 'axios';
 import fs from 'fs';
@@ -24,8 +23,7 @@ const __dirname = path.dirname(__filename);
 
 class ConversionsController {
     constructor() {
-        this.playwrightBrowser = null; // For HTML/CSS/JS with Paged.js
-        this.puppeteerBrowser = null;  // For URLs (simple)
+        this.browser = null; // Single Puppeteer browser for everything
         this.pdfStoragePath = path.join(__dirname, '..', '..', 'pdfs');
         this.pdfPostProcessingService = new PDFPostProcessingService();
         this.pdfCache = new Map(); // Simple in-memory cache
@@ -228,38 +226,21 @@ class ConversionsController {
 
 
 
-    async initPlaywrightBrowser() {
-        if (!this.playwrightBrowser) {
+    async initBrowser() {
+        if (!this.browser) {
             try {
-                this.playwrightBrowser = await chromium.launch({
+                this.browser = await puppeteer.launch({
                     headless: true,
                     timeout: 30000,
                     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
                 });
-                console.log('✅ Playwright browser ready for HTML/CSS/JS + Paged.js');
-            } catch (error) {
-                console.error('Playwright browser failed:', error);
-                throw error;
-            }
-        }
-        return this.playwrightBrowser;
-    }
-
-    async initPuppeteerBrowser() {
-        if (!this.puppeteerBrowser) {
-            try {
-                this.puppeteerBrowser = await puppeteer.launch({
-                    headless: true,
-                    timeout: 30000,
-                    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
-                });
-                console.log('✅ Puppeteer browser ready for URL requests');
+                console.log('✅ Puppeteer browser ready - smart routing for URLs vs HTML/CSS/JS');
             } catch (error) {
                 console.error('Puppeteer browser failed:', error);
                 throw error;
             }
         }
-        return this.puppeteerBrowser;
+        return this.browser;
     }
 
     async initQueue() {
@@ -409,9 +390,9 @@ class ConversionsController {
             console.log('🌐 URL request detected - using Puppeteer');
             return await this.generatePDFWithPuppeteer(htmlContent, options);
         } else {
-            // HTML/CSS/JS requests: Use Playwright + Paged.js
-            console.log('📝 HTML content detected - using Playwright + Paged.js');
-            return await this.generatePDFWithPlaywright(htmlContent, options);
+            // HTML/CSS/JS requests: Use Puppeteer + Paged.js
+            console.log('📝 HTML content detected - using Puppeteer + Paged.js');
+            return await this.generatePDFWithPuppeteerPagedJS(htmlContent, options);
         }
 
         const pdfOptions = {
@@ -441,11 +422,11 @@ class ConversionsController {
 
     }
 
-    // Playwright + Paged.js for HTML/CSS/JS content
-    async generatePDFWithPlaywright(htmlContent, options = {}) {
-        const browser = await this.initPlaywrightBrowser();
-        const context = await browser.newContext({ viewport: { width: 1200, height: 800 } });
-        const page = await context.newPage();
+    // Puppeteer + Paged.js for HTML/CSS/JS content
+    async generatePDFWithPuppeteerPagedJS(htmlContent, options = {}) {
+        const browser = await this.initBrowser();
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1200, height: 800 });
 
         try {
             // Inject Paged.js for advanced print layouts
@@ -465,16 +446,16 @@ class ConversionsController {
                 timeout: 30000
             });
 
-            console.log(`📄 Playwright + Paged.js PDF: ${pdf.length} bytes`);
+            console.log(`📄 Puppeteer + Paged.js PDF: ${pdf.length} bytes`);
             return pdf;
         } finally {
-            await context.close();
+            await page.close();
         }
     }
 
     // Simple Puppeteer for URL requests
     async generatePDFWithPuppeteer(url, options = {}) {
-        const browser = await this.initPuppeteerBrowser();
+        const browser = await this.initBrowser();
         const page = await browser.newPage();
 
         try {
