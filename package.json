@@ -29,7 +29,7 @@
         "nodemailer": "^6.9.15",
         "papaparse": "^5.4.1",
         "pdf-lib": "^1.17.1",
-        "playwright": "^1.49.1",
+        "playwright-core": "^1.49.1",
         "bullmq": "^5.13.2",
         "ioredis": "^5.4.1",
         "stripe": "^14.21.0",
@@ -42,8 +42,7 @@
     },
     "scripts": {
         "start": "node server.js",
-        "build": "npm install",
-        "postinstall": "npx playwright install chromium",
+        "build": "npm install && npx playwright-core install chromium",
         "dev": "nodemon server.js",
         "dev:debug": "nodemon --inspect server.js",
         "dev:verbose": "nodemon --verbose server.js"
