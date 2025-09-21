@@ -5,6 +5,8 @@
     "main": "server.js",
     "license": "MIT",
     "dependencies": {
+        "@notionhq/client": "^2.2.15",
+        "@supabase/supabase-js": "^2.39.0",
         "airtable": "^0.12.2",
         "aws-sdk": "^2.1691.0",
         "axios": "^1.7.9",
