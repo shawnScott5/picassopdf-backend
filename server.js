@@ -176,17 +176,7 @@ app.use('/api/logs', LogsRoute);
 app.use('/api/api-keys', ApiKeysRoute);
 app.use('/api/organizations', OrganizationRoute);
 
-// Serve static files from Angular's `dist` folder
-app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist', 'frontend')));
-
-// Handle all other routes by redirecting to `index.html` (but skip API routes)
-app.get('*', (req, res, next) => {
-    // Skip API routes
-    if (req.path.startsWith('/v1/') || req.path.startsWith('/api/')) {
-        return next();
-    }
-    res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'frontend', 'index.html'));
-});
+// Frontend is deployed separately (Netlify), no static file serving needed
 
 // Connect to the database
 db();
