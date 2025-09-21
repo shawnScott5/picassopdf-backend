@@ -3,6 +3,7 @@ import LogsSchema from './LogsSchema.js';
 import UserSchema from '../users/UserSchema.js';
 import PDFPostProcessingService from '../services/PDFPostProcessingService.js';
 import { chromium } from 'playwright';
+import puppeteer from 'puppeteer';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
@@ -23,7 +24,8 @@ const __dirname = path.dirname(__filename);
 
 class ConversionsController {
     constructor() {
-        this.browser = null;
+        this.playwrightBrowser = null; // For HTML/CSS/JS with Paged.js
+        this.puppeteerBrowser = null;  // For URLs (simple)
         this.pdfStoragePath = path.join(__dirname, '..', '..', 'pdfs');
         this.pdfPostProcessingService = new PDFPostProcessingService();
         this.pdfCache = new Map(); // Simple in-memory cache
@@ -226,24 +228,38 @@ class ConversionsController {
 
 
 
-    async initBrowser() {
-        try {
-            // Single browser per dyno - proper Heroku scaling approach
-            this.browser = await chromium.launch({
-                headless: true, // Required for Heroku
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu'
-                ]
-            });
-            console.log('✅ Single browser initialized per dyno - ready for horizontal scaling');
-            console.log('🚀 Add more dynos for more concurrent capacity');
-        } catch (error) {
-            console.error('Failed to initialize browser:', error);
-            throw error; // Fail fast if browser doesn't work
+    async initPlaywrightBrowser() {
+        if (!this.playwrightBrowser) {
+            try {
+                this.playwrightBrowser = await chromium.launch({
+                    headless: true,
+                    timeout: 30000,
+                    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+                });
+                console.log('✅ Playwright browser ready for HTML/CSS/JS + Paged.js');
+            } catch (error) {
+                console.error('Playwright browser failed:', error);
+                throw error;
+            }
         }
+        return this.playwrightBrowser;
+    }
+
+    async initPuppeteerBrowser() {
+        if (!this.puppeteerBrowser) {
+            try {
+                this.puppeteerBrowser = await puppeteer.launch({
+                    headless: true,
+                    timeout: 30000,
+                    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+                });
+                console.log('✅ Puppeteer browser ready for URL requests');
+            } catch (error) {
+                console.error('Puppeteer browser failed:', error);
+                throw error;
+            }
+        }
+        return this.puppeteerBrowser;
     }
 
     async initQueue() {
@@ -385,12 +401,17 @@ class ConversionsController {
             }
         }
 
-        // Lazy browser initialization - only when needed for PDF generation
-        if (!this.browser) {
-            await this.initBrowser();
-            if (!this.browser) {
-                throw new Error('Browser failed to initialize');
-            }
+        // Smart browser selection based on content type
+        const isUrlRequest = options.isUrl || false;
+        
+        if (isUrlRequest) {
+            // URL requests: Use simple Puppeteer
+            console.log('🌐 URL request detected - using Puppeteer');
+            return await this.generatePDFWithPuppeteer(htmlContent, options);
+        } else {
+            // HTML/CSS/JS requests: Use Playwright + Paged.js
+            console.log('📝 HTML content detected - using Playwright + Paged.js');
+            return await this.generatePDFWithPlaywright(htmlContent, options);
         }
 
         const pdfOptions = {
@@ -418,40 +439,62 @@ class ConversionsController {
             pdfOptions.footerTemplate = options.footerTemplate || '<div></div>';
         }
 
+    }
+
+    // Playwright + Paged.js for HTML/CSS/JS content
+    async generatePDFWithPlaywright(htmlContent, options = {}) {
+        const browser = await this.initPlaywrightBrowser();
+        const context = await browser.newContext({ viewport: { width: 1200, height: 800 } });
+        const page = await context.newPage();
+
         try {
-            // Create isolated context for this request (Playwright's unlimited concurrency)
-            const context = await this.browser.newContext({
-                viewport: { width: 1200, height: 800 }
+            // Inject Paged.js for advanced print layouts
+            await page.addScriptTag({ 
+                url: 'https://unpkg.com/pagedjs/dist/paged.polyfill.js' 
             });
-            const page = await context.newPage();
 
-            try {
-                // Set content with optimized wait conditions
-                await page.setContent(htmlContent, { 
-                    waitUntil: 'domcontentloaded',
-                    timeout: 15000 
-                });
+            // Set content and wait for Paged.js to process
+            await page.setContent(htmlContent, { waitUntil: 'load', timeout: 10000 });
+            await page.waitForFunction(() => window.PagedPolyfill, { timeout: 5000 });
+            await page.waitForTimeout(500); // Let Paged.js finish
 
-                // Wait a bit for any dynamic content
-                await page.waitForTimeout(500);
+            const pdf = await page.pdf({
+                format: options.format || 'A4',
+                printBackground: true,
+                margin: options.margin || { top: '20px', right: '20px', bottom: '20px', left: '20px' },
+                timeout: 30000
+            });
 
-                // Generate PDF
-                const pdf = await page.pdf(pdfOptions);
-
-            // Cache the result (skip for URLs)
-            if (!options.isUrl) {
-                const cacheKey = this.generateCacheKey(htmlContent, options);
-                this.cachePDF(cacheKey, pdf);
-            }
-
-                console.log(`📄 PDF generated: ${pdf.length} bytes`);
+            console.log(`📄 Playwright + Paged.js PDF: ${pdf.length} bytes`);
             return pdf;
-            } finally {
-                await context.close(); // Playwright context cleanup
-            }
-        } catch (error) {
-            console.error('PDF generation failed:', error);
-            throw error;
+        } finally {
+            await context.close();
+        }
+    }
+
+    // Simple Puppeteer for URL requests
+    async generatePDFWithPuppeteer(url, options = {}) {
+        const browser = await this.initPuppeteerBrowser();
+        const page = await browser.newPage();
+
+        try {
+            await page.goto(url, { 
+                waitUntil: 'load', // Don't wait for networkidle
+                timeout: 15000 
+            });
+            await page.waitForTimeout(300);
+
+            const pdf = await page.pdf({
+                format: options.format || 'A4',
+                printBackground: true,
+                margin: options.margin || { top: '20px', right: '20px', bottom: '20px', left: '20px' },
+                timeout: 30000
+            });
+
+            console.log(`📄 Puppeteer URL PDF: ${pdf.length} bytes`);
+            return pdf;
+        } finally {
+            await page.close();
         }
     }
 
