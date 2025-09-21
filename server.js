@@ -189,14 +189,18 @@ const server = app.listen(PORT, () => {
     console.log(`🔧 Process ID: ${process.pid}`);
     console.log(`💾 Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
     
-    // Check for system Chromium availability
-    try {
-        const chromiumPath = execSync("which chromium || which chromium-browser").toString().trim();
-        console.log("🖥️ System Chromium found at:", chromiumPath);
-    } catch (error) {
-        console.log("❌ No system Chromium found in container");
-        console.log("🔍 Will use Playwright bundled browser");
-    }
+           // Check for Chromium availability
+           if (process.env.GOOGLE_CHROME_BIN) {
+               console.log("🚀 Heroku Chromium found at:", process.env.GOOGLE_CHROME_BIN);
+           } else {
+               try {
+                   const chromiumPath = execSync("which chromium || which chromium-browser").toString().trim();
+                   console.log("🖥️ System Chromium found at:", chromiumPath);
+               } catch (error) {
+                   console.log("❌ No system Chromium found in container");
+                   console.log("🔍 Will use Playwright bundled browser");
+               }
+           }
 });
 
 // Graceful shutdown handling

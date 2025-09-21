@@ -22,9 +22,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * Get Chromium executable path for Docker/Render environment
+ * Get Chromium executable path for Heroku environment
  */
 function getChromiumExecPath() {
+    // Heroku sets GOOGLE_CHROME_BIN environment variable
+    if (process.env.GOOGLE_CHROME_BIN) {
+        console.log("✅ Using Heroku Chromium:", process.env.GOOGLE_CHROME_BIN);
+        return process.env.GOOGLE_CHROME_BIN;
+    }
+    
+    // Fallback for local development or other environments
     const candidates = ["/usr/bin/chromium", "/usr/bin/chromium-browser"];
     for (const p of candidates) {
         if (existsSync(p)) {
@@ -36,10 +43,25 @@ function getChromiumExecPath() {
 }
 
 /**
- * Launch browser with system Chromium (Docker/Render) or Playwright bundled browser
+ * Launch browser with Heroku Chromium or Playwright bundled browser
  */
 async function launchBrowser() {
-    // Always try system Chromium first if available
+    // Try Heroku Chromium first (if GOOGLE_CHROME_BIN is set)
+    if (process.env.GOOGLE_CHROME_BIN) {
+        try {
+            console.log('🚀 Attempting to use Heroku Chromium:', process.env.GOOGLE_CHROME_BIN);
+            return await chromium.launch({
+                headless: true,
+                executablePath: process.env.GOOGLE_CHROME_BIN,
+                args: ["--no-sandbox", "--disable-setuid-sandbox"],
+            });
+        } catch (error) {
+            console.log('⚠️ Heroku Chromium failed:', error.message);
+            console.log('🔄 Falling back to Playwright bundled browser');
+        }
+    }
+    
+    // Try system Chromium (for Docker/local development)
     try {
         const execPath = getChromiumExecPath();
         console.log('🐳 Attempting to use system Chromium:', execPath);
