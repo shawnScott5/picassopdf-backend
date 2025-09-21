@@ -43,28 +43,28 @@ function getChromiumExecPath() {
 }
 
 /**
- * Launch browser with Heroku Chromium or Playwright bundled browser
+ * Launch browser optimized for Heroku Chrome buildpack
  */
 async function launchBrowser() {
-    // Try Heroku Chromium first (if GOOGLE_CHROME_BIN is set)
+    // Priority 1: Heroku Chrome buildpack (GOOGLE_CHROME_BIN)
     if (process.env.GOOGLE_CHROME_BIN) {
         try {
-            console.log('🚀 Attempting to use Heroku Chromium:', process.env.GOOGLE_CHROME_BIN);
+            console.log('🚀 Using Heroku Chrome buildpack:', process.env.GOOGLE_CHROME_BIN);
             return await chromium.launch({
                 headless: true,
                 executablePath: process.env.GOOGLE_CHROME_BIN,
-                args: ["--no-sandbox", "--disable-setuid-sandbox"],
+                args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
             });
         } catch (error) {
-            console.log('⚠️ Heroku Chromium failed:', error.message);
-            console.log('🔄 Falling back to Playwright bundled browser');
+            console.log('⚠️ Heroku Chrome failed:', error.message);
+            console.log('🔄 Falling back to system Chromium');
         }
     }
     
-    // Try system Chromium (for Docker/local development)
+    // Priority 2: System Chromium (Docker/local development)
     try {
         const execPath = getChromiumExecPath();
-        console.log('🐳 Attempting to use system Chromium:', execPath);
+        console.log('🐳 Using system Chromium:', execPath);
         return await chromium.launch({
             headless: true,
             executablePath: execPath,
@@ -75,30 +75,16 @@ async function launchBrowser() {
         console.log('🔄 Falling back to Playwright bundled browser');
     }
     
-    // Fallback to Playwright's bundled browser
+    // Priority 3: Playwright bundled browser (development fallback)
     try {
-        console.log('🎭 Attempting to use Playwright bundled browser...');
+        console.log('🎭 Using Playwright bundled browser...');
         return await chromium.launch({
             headless: true,
             args: ["--no-sandbox", "--disable-setuid-sandbox"],
         });
     } catch (error) {
-        console.log('⚠️ Playwright bundled browser failed:', error.message);
-        console.log('🔧 Attempting runtime installation of Chromium...');
-        
-        // Last resort: install Chromium at runtime
-        try {
-            const { install } = await import('playwright');
-            await install(['chromium']);
-            console.log('✅ Runtime Chromium installation successful');
-            return await chromium.launch({
-                headless: true,
-                args: ["--no-sandbox", "--disable-setuid-sandbox"],
-            });
-        } catch (installError) {
-            console.error('❌ Runtime installation failed:', installError.message);
-            throw new Error(`Browser launch failed: ${error.message}. Runtime install also failed: ${installError.message}`);
-        }
+        console.error('❌ All browser options failed:', error.message);
+        throw new Error(`Browser launch failed: ${error.message}. Please check your deployment configuration.`);
     }
 }
 

@@ -191,14 +191,15 @@ const server = app.listen(PORT, () => {
     
            // Check for Chromium availability
            if (process.env.GOOGLE_CHROME_BIN) {
-               console.log("🚀 Heroku Chromium found at:", process.env.GOOGLE_CHROME_BIN);
+               console.log("🚀 Heroku Chrome buildpack found at:", process.env.GOOGLE_CHROME_BIN);
+               console.log("✅ Ready for PDF generation with Heroku Chrome");
            } else {
                try {
                    const chromiumPath = execSync("which chromium || which chromium-browser").toString().trim();
                    console.log("🖥️ System Chromium found at:", chromiumPath);
                } catch (error) {
-                   console.log("❌ No system Chromium found in container");
-                   console.log("🔍 Will use Playwright bundled browser");
+                   console.log("❌ No system Chromium found");
+                   console.log("🔍 Will fall back to Playwright bundled browser");
                }
            }
 });
