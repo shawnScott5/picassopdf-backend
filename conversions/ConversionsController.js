@@ -21,6 +21,40 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * Get Chromium executable path for Docker/Render environment
+ */
+function getChromiumExecPath() {
+    const candidates = ["/usr/bin/chromium", "/usr/bin/chromium-browser"];
+    for (const p of candidates) {
+        if (existsSync(p)) {
+            console.log("✅ Using system Chromium:", p);
+            return p;
+        }
+    }
+    throw new Error("❌ Chromium not found in container");
+}
+
+/**
+ * Launch browser with system Chromium (Docker/Render) or Playwright bundled browser
+ */
+async function launchBrowser() {
+    if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
+        const execPath = getChromiumExecPath();
+        return await chromium.launch({
+            headless: true,
+            executablePath: execPath,
+            args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        });
+    } else {
+        // Use Playwright's bundled browser for local development
+        return await chromium.launch({
+            headless: true,
+            args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        });
+    }
+}
+
 class ConversionsController {
     constructor() {
         this.browser = null; // Single Playwright browser for everything
@@ -333,40 +367,7 @@ class ConversionsController {
             
         try {
             // Create a completely fresh browser instance for each request
-            const launchOptions = {
-                headless: true,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--disable-web-security',
-                    '--disable-features=VizDisplayCompositor',
-                    '--single-process',
-                    '--no-zygote',
-                    '--disable-background-timer-throttling',
-                    '--disable-backgrounding-occluded-windows',
-                    '--disable-renderer-backgrounding',
-                    '--memory-pressure-off',
-                    '--max_old_space_size=4096'
-                ]
-            };
-
-            // Force system Chromium in Docker/Render environment
-            if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
-                // Check multiple possible Chromium paths
-                const paths = ["/usr/bin/chromium", "/usr/bin/chromium-browser"];
-                const execPath = paths.find(p => existsSync(p));
-                
-                if (execPath) {
-                    launchOptions.executablePath = execPath;
-                    console.log('🐳 Using system Chromium at:', execPath);
-                } else {
-                    console.log('⚠️ No system Chromium found, using Playwright bundled browser');
-                }
-            }
-
-            browser = await chromium.launch(launchOptions);
+            browser = await launchBrowser();
             
             // Create a new context and page for complete isolation
             context = await browser.newContext();
