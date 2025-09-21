@@ -198,12 +198,49 @@ class ConversionsController {
     async initBrowser() {
         if (!this.browser) {
             try {
-                this.browser = await puppeteer.launch({
+                const puppeteerOptions = {
                     headless: true,
-                    timeout: 30000,
-                    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
-                });
-                console.log('✅ Puppeteer browser ready - smart routing for URLs vs HTML/CSS/JS');
+                    timeout: 60000,
+                    args: [
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--disable-web-security',
+                        '--disable-features=VizDisplayCompositor',
+                        '--single-process',
+                        '--no-zygote',
+                        '--disable-background-timer-throttling',
+                        '--disable-backgrounding-occluded-windows',
+                        '--disable-renderer-backgrounding',
+                        '--memory-pressure-off',
+                        '--max_old_space_size=4096'
+                    ]
+                };
+
+                // Use installed Chrome in production
+                if (process.env.NODE_ENV === 'production') {
+                    const fs = await import('fs');
+                    const path = await import('path');
+                    const puppeteerPath = '/opt/render/.cache/puppeteer';
+                    
+                    try {
+                        // Find the Chrome executable dynamically
+                        const chromeDir = fs.readdirSync(puppeteerPath).find(dir => dir.startsWith('chrome'));
+                        if (chromeDir) {
+                            const chromePath = path.join(puppeteerPath, chromeDir, 'chrome-linux64', 'chrome');
+                            if (fs.existsSync(chromePath)) {
+                                puppeteerOptions.executablePath = chromePath;
+                                console.log('Using installed Chrome at:', chromePath);
+                            }
+                        }
+                    } catch (error) {
+                        console.log('Could not find installed Chrome, using system Chrome');
+                    }
+                }
+
+                this.browser = await puppeteer.launch(puppeteerOptions);
+                console.log('✅ Puppeteer browser ready - optimized for Render deployment');
             } catch (error) {
                 console.error('Puppeteer browser failed:', error);
                 throw error;
@@ -393,32 +430,42 @@ class ConversionsController {
 
     // Puppeteer + Paged.js for HTML/CSS/JS content
     async generatePDFWithPuppeteerPagedJS(htmlContent, options = {}) {
-        const browser = await this.initBrowser();
-        const page = await browser.newPage();
-        await page.setViewport({ width: 1200, height: 800 });
-
+        let browser = null;
+        let page = null;
+        
         try {
+            browser = await this.initBrowser();
+            page = await browser.newPage();
+            await page.setViewport({ width: 1200, height: 800 });
+
             // Inject Paged.js for advanced print layouts
             await page.addScriptTag({ 
                 url: 'https://unpkg.com/pagedjs/dist/paged.polyfill.js' 
             });
 
             // Set content and wait for Paged.js to process
-            await page.setContent(htmlContent, { waitUntil: 'load', timeout: 10000 });
-            await page.waitForFunction(() => window.PagedPolyfill, { timeout: 5000 });
-            await new Promise(resolve => setTimeout(resolve, 500)); // Let Paged.js finish
+            await page.setContent(htmlContent, { waitUntil: 'load', timeout: 15000 });
+            await page.waitForFunction(() => window.PagedPolyfill, { timeout: 10000 });
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Let Paged.js finish
 
             const pdf = await page.pdf({
                 format: options.format || 'A4',
                 printBackground: true,
                 margin: options.margin || { top: '20px', right: '20px', bottom: '20px', left: '20px' },
-                timeout: 30000
+                timeout: 60000
             });
 
             console.log(`📄 Puppeteer + Paged.js PDF: ${pdf.length} bytes`);
             return pdf;
+        } catch (error) {
+            console.error('Error in generatePDFWithPuppeteerPagedJS:', error);
+            throw error;
         } finally {
-            await page.close();
+            try {
+                if (page) await page.close();
+            } catch (closeError) {
+                console.error('Error closing page:', closeError);
+            }
         }
     }
 
