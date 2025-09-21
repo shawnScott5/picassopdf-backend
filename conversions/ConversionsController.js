@@ -2,7 +2,7 @@ import ConversionsSchema from './ConversionsSchema.js';
 import LogsSchema from './LogsSchema.js';
 import UserSchema from '../users/UserSchema.js';
 import PDFPostProcessingService from '../services/PDFPostProcessingService.js';
-import puppeteer from 'puppeteer';
+import { chromium } from 'playwright';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
@@ -198,33 +198,18 @@ class ConversionsController {
     async initBrowser() {
         if (!this.browser) {
             try {
-                const puppeteerOptions = {
+                this.browser = await chromium.launch({
                     headless: true,
-                    timeout: 60000,
                     args: [
                         '--no-sandbox',
                         '--disable-setuid-sandbox',
                         '--disable-dev-shm-usage',
-                        '--disable-gpu',
-                        '--disable-web-security',
-                        '--disable-features=VizDisplayCompositor',
-                        '--single-process',
-                        '--no-zygote',
-                        '--disable-background-timer-throttling',
-                        '--disable-backgrounding-occluded-windows',
-                        '--disable-renderer-backgrounding',
-                        '--memory-pressure-off',
-                        '--max_old_space_size=4096'
+                        '--disable-gpu'
                     ]
-                };
-
-                // Use Puppeteer's bundled Chromium (no custom executablePath needed)
-                console.log('Using Puppeteer bundled Chromium');
-
-                this.browser = await puppeteer.launch(puppeteerOptions);
-                console.log('✅ Puppeteer browser ready - optimized for Render deployment');
+                });
+                console.log('✅ Playwright browser ready - optimized for Render deployment');
             } catch (error) {
-                console.error('Puppeteer browser failed:', error);
+                console.error('Playwright browser failed:', error);
                 throw error;
             }
         }
