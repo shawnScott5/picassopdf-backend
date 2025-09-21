@@ -46,42 +46,54 @@ class ConversionsController {
     }
 
     async initBrowser() {
-        if (!this.browser) {
+        // Check if browser exists and is still alive
+        if (this.browser) {
             try {
-                // Use system-installed Chromium on Render/Docker
-                const launchOptions = {
-                    headless: true,
-                    args: [
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-gpu',
-                        '--disable-web-security',
-                        '--disable-features=VizDisplayCompositor',
-                        '--single-process',
-                        '--no-zygote',
-                        '--disable-background-timer-throttling',
-                        '--disable-backgrounding-occluded-windows',
-                        '--disable-renderer-backgrounding',
-                        '--memory-pressure-off',
-                        '--max_old_space_size=4096'
-                    ]
-                };
-
-                // On Render/Docker, use system Chromium
-                if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
-                    launchOptions.executablePath = '/usr/bin/chromium';
-                    console.log('🐳 Using system-installed Chromium (Docker/Render)');
-                }
-
-                this.browser = await chromium.launch(launchOptions);
-                console.log('✅ Playwright browser ready - optimized for Render deployment');
+                // Test if browser is still connected
+                const pages = await this.browser.pages();
+                return this.browser;
             } catch (error) {
-                console.error('Playwright browser failed:', error);
-                throw error;
+                console.log('🔄 Browser was closed, creating new one...');
+                this.browser = null;
             }
         }
-        return this.browser;
+
+        // Create new browser instance
+        try {
+            // Use system-installed Chromium on Render/Docker
+            const launchOptions = {
+                headless: true,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-web-security',
+                    '--disable-features=VizDisplayCompositor',
+                    '--single-process',
+                    '--no-zygote',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-renderer-backgrounding',
+                    '--memory-pressure-off',
+                    '--max_old_space_size=4096'
+                ]
+            };
+
+            // On Render/Docker, use system Chromium
+            if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
+                launchOptions.executablePath = '/usr/bin/chromium';
+                console.log('🐳 Using system-installed Chromium (Docker/Render)');
+            }
+
+            this.browser = await chromium.launch(launchOptions);
+            console.log('✅ Playwright browser ready - optimized for Render deployment');
+            return this.browser;
+        } catch (error) {
+            console.error('Playwright browser failed:', error);
+            this.browser = null;
+            throw error;
+        }
     }
 
     initializeR2() {
@@ -319,9 +331,8 @@ class ConversionsController {
         let page = null;
         
         try {
-            // Create a fresh browser instance for each PDF generation
-            // This prevents issues with closed browsers
-            const launchOptions = {
+            // Create a fresh browser instance for each request
+            browser = await chromium.launch({
                 headless: true,
                 args: [
                     '--no-sandbox',
@@ -338,15 +349,8 @@ class ConversionsController {
                     '--memory-pressure-off',
                     '--max_old_space_size=4096'
                 ]
-            };
-
-            // On Render/Docker, use system Chromium
-            if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
-                launchOptions.executablePath = '/usr/bin/chromium';
-                console.log('🐳 Using system-installed Chromium (Docker/Render)');
-            }
-
-            browser = await chromium.launch(launchOptions);
+            });
+            
             page = await browser.newPage();
             
             if (options.isUrl) {
@@ -384,7 +388,7 @@ class ConversionsController {
             console.error('Error in generatePDF:', error);
             throw error;
         } finally {
-            // Always clean up browser and page
+            // Always clean up
             if (page) {
                 try {
                     await page.close();
