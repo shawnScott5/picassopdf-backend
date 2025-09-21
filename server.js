@@ -171,6 +171,7 @@ app.use('/api/subscribe-stripe-scale', SubscribeStripeScaleRoute);
 app.use('/api/subscribe-stripe-custom', SubscribeStripeCustomRoute);
 app.use('/api/audiobooks', AudiobookRoute);
 app.use('/api/conversions', ConversionsRoute);
+app.use('/api/v1', ConversionsRoute);
 app.use('/api/logs', LogsRoute);
 app.use('/api/api-keys', ApiKeysRoute);
 app.use('/api/organizations', OrganizationRoute);
