@@ -44,7 +44,7 @@
         "nodemon": "^3.1.7"
     },
     "scripts": {
-        "start": "node server.js",
+        "start": "npx puppeteer browsers install chrome && node server.js",
         "build": "npx puppeteer browsers install chrome",
         "dev": "nodemon server.js",
         "dev:debug": "nodemon --inspect server.js",

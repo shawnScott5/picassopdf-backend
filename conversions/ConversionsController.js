@@ -235,7 +235,26 @@ class ConversionsController {
                             }
                         }
                     } catch (error) {
-                        console.log('Could not find installed Chrome, using system Chrome');
+                        console.log('Could not find installed Chrome, trying system Chrome');
+                        // Try common system Chrome paths
+                        const systemPaths = [
+                            '/usr/bin/google-chrome',
+                            '/usr/bin/google-chrome-stable',
+                            '/usr/bin/chromium-browser',
+                            '/usr/bin/chromium'
+                        ];
+                        
+                        for (const systemPath of systemPaths) {
+                            try {
+                                if (fs.existsSync(systemPath)) {
+                                    puppeteerOptions.executablePath = systemPath;
+                                    console.log('Using system Chrome at:', systemPath);
+                                    break;
+                                }
+                            } catch (e) {
+                                // Continue to next path
+                            }
+                        }
                     }
                 }
 
