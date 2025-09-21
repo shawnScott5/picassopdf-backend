@@ -354,8 +354,16 @@ class ConversionsController {
 
             // Force system Chromium in Docker/Render environment
             if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
-                launchOptions.executablePath = '/usr/bin/chromium';
-                console.log('🐳 Forcing system Chromium: /usr/bin/chromium');
+                // Check multiple possible Chromium paths
+                const paths = ["/usr/bin/chromium", "/usr/bin/chromium-browser"];
+                const execPath = paths.find(p => existsSync(p));
+                
+                if (execPath) {
+                    launchOptions.executablePath = execPath;
+                    console.log('🐳 Using system Chromium at:', execPath);
+                } else {
+                    console.log('⚠️ No system Chromium found, using Playwright bundled browser');
+                }
             }
 
             browser = await chromium.launch(launchOptions);
