@@ -290,9 +290,9 @@ class ConversionsController {
     }
 
     /**
-     * High-performance PDF generation using cluster
+     * PDF generation using Playwright (handles concurrency internally)
      */
-    async generatePDFWithCluster(htmlContent, options = {}) {
+    async generatePDF(htmlContent, options = {}) {
         // Check cache first (skip for URLs to avoid stale content)
         if (!options.isUrl) {
             const cacheKey = this.generateCacheKey(htmlContent, options);
@@ -345,7 +345,7 @@ class ConversionsController {
                 await page.close();
             }
         } catch (error) {
-            console.error('Error in generatePDFWithCluster:', error);
+            console.error('Error in generatePDF:', error);
             throw error;
         }
 
@@ -1784,8 +1784,8 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             let htmlContent;
             if (hasUrl) {
                 // For URLs, we need to fetch and process separately
-                if (this.cluster) {
-                    htmlContent = await this.cluster.execute({ url }, async ({ page, data }) => {
+                // Use simple fetch for URL content (no cluster needed)
+                try {
                         await page.goto(data.url, { 
                             waitUntil: 'domcontentloaded',
                             timeout: 20000 
@@ -1853,9 +1853,9 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 footerTemplate: options.footerTemplate || '<div style="font-size: 10px; text-align: center; width: 100%;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>'
             };
 
-            // Use high-performance cluster for PDF generation
+            // Use Playwright for PDF generation (handles concurrency internally)
             pdfOptions.isUrl = hasUrl; // Pass URL flag for caching decision
-            const pdfBuffer = await this.generatePDFWithCluster(htmlContent, pdfOptions);
+            const pdfBuffer = await this.generatePDF(htmlContent, pdfOptions);
 
             // Save PDF to file system
             await fsPromises.writeFile(filePath, pdfBuffer);
