@@ -29,6 +29,7 @@ import ApiKeysRoute from './api-keys/ApiKeysRoute.js';
 import OrganizationRoute from './organizations/OrganizationRoute.js';
 import conversionsController from './conversions/ConversionsController.js';
 import apiKeyAuth from './middlewares/apiKeyAuth.js';
+import { execSync } from 'child_process';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -187,6 +188,15 @@ const server = app.listen(PORT, () => {
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔧 Process ID: ${process.pid}`);
     console.log(`💾 Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
+    
+    // Check for system Chromium availability
+    try {
+        const chromiumPath = execSync("which chromium || which chromium-browser").toString().trim();
+        console.log("🖥️ System Chromium found at:", chromiumPath);
+    } catch (error) {
+        console.log("❌ No system Chromium found in container");
+        console.log("🔍 Will use Playwright bundled browser");
+    }
 });
 
 // Graceful shutdown handling

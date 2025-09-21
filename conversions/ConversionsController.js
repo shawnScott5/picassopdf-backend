@@ -39,20 +39,25 @@ function getChromiumExecPath() {
  * Launch browser with system Chromium (Docker/Render) or Playwright bundled browser
  */
 async function launchBrowser() {
-    if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
+    // Always try system Chromium first if available
+    try {
         const execPath = getChromiumExecPath();
+        console.log('🐳 Attempting to use system Chromium:', execPath);
         return await chromium.launch({
             headless: true,
             executablePath: execPath,
             args: ["--no-sandbox", "--disable-setuid-sandbox"],
         });
-    } else {
-        // Use Playwright's bundled browser for local development
-        return await chromium.launch({
-            headless: true,
-            args: ["--no-sandbox", "--disable-setuid-sandbox"],
-        });
+    } catch (error) {
+        console.log('⚠️ System Chromium failed:', error.message);
+        console.log('🔄 Falling back to Playwright bundled browser');
     }
+    
+    // Fallback to Playwright's bundled browser
+    return await chromium.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
 }
 
 class ConversionsController {
