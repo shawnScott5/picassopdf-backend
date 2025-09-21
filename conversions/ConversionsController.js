@@ -24,7 +24,6 @@ const __dirname = path.dirname(__filename);
 class ConversionsController {
     constructor() {
         this.browser = null;
-        this.cluster = null;
         this.pdfStoragePath = path.join(__dirname, '..', '..', 'pdfs');
         this.pdfPostProcessingService = new PDFPostProcessingService();
         this.pdfCache = new Map(); // Simple in-memory cache
@@ -33,7 +32,7 @@ class ConversionsController {
         this.queueService = null; // Will be initialized conditionally
         this.ensurePDFDirectory();
         this.initializeR2();
-        this.initCluster();
+        this.initBrowser(); // Single browser per dyno
         this.initQueue();
     }
 
@@ -226,11 +225,12 @@ class ConversionsController {
     }
 
 
-    async initCluster() {
+
+    async initBrowser() {
         try {
-            // Simple Playwright browser - handles unlimited concurrent requests
+            // Single browser per dyno - proper Heroku scaling approach
             this.browser = await chromium.launch({
-                headless: true,
+                headless: true, // Required for Heroku
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
@@ -238,32 +238,11 @@ class ConversionsController {
                     '--disable-gpu'
                 ]
             });
-            console.log('✅ Playwright browser initialized - unlimited concurrency ready');
+            console.log('✅ Single browser initialized per dyno - ready for horizontal scaling');
+            console.log('🚀 Add more dynos for more concurrent capacity');
         } catch (error) {
             console.error('Failed to initialize browser:', error);
-            this.browser = null;
-        }
-    }
-
-    async initBrowser() {
-        try {
-            this.browser = await chromium.launch({
-                headless: true,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--disable-gpu',
-                    '--memory-pressure-off',
-                    '--max_old_space_size=4096'
-                ]
-            });
-            console.log('Browser initialized for PDF conversion (fallback mode)');
-        } catch (error) {
-            console.error('Failed to initialize browser:', error);
+            throw error; // Fail fast if browser doesn't work
         }
     }
 
@@ -407,7 +386,7 @@ class ConversionsController {
         }
 
         if (!this.browser) {
-            await this.initCluster();
+            await this.initBrowser();
         }
 
         if (!this.browser) {
