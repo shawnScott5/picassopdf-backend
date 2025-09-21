@@ -47,40 +47,9 @@ class ConversionsController {
 
     initializeR2() {
         try {
-            const r2AccessKeyId = process.env.R2_ACCESS_KEY_ID;
-            const r2SecretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-            const r2BucketName = process.env.R2_BUCKET_NAME || 'primepdf';
-            const r2AccountId = process.env.R2_ACCOUNT_ID;
-
-            if (!r2AccessKeyId || !r2SecretAccessKey || !r2AccountId) {
-                console.warn('R2 credentials not found in environment variables');
-                console.log('Missing:', {
-                    accessKeyId: !!r2AccessKeyId,
-                    secretAccessKey: !!r2SecretAccessKey,
-                    accountId: !!r2AccountId
-                });
-                this.r2Enabled = false;
-                return;
-            }
-
-            // Configure AWS SDK for Cloudflare R2
-            this.s3 = new AWS.S3({
-                endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
-                accessKeyId: r2AccessKeyId,
-                secretAccessKey: r2SecretAccessKey,
-                region: 'auto', // R2 uses 'auto' as region
-                signatureVersion: 'v4',
-                s3ForcePathStyle: true, // Required for R2
-                s3BucketEndpoint: false, // Required for R2
-            });
-
-            this.r2BucketName = r2BucketName;
-            this.r2Enabled = true;
-            console.log('Cloudflare R2 initialized successfully');
-            console.log('R2 Endpoint:', `https://${r2AccountId}.r2.cloudflarestorage.com`);
-            console.log('R2 Bucket:', r2BucketName);
-            console.log('R2 Access Key ID (first 8 chars):', r2AccessKeyId.substring(0, 8) + '...');
-            console.log('R2 Secret Key (first 8 chars):', r2SecretAccessKey.substring(0, 8) + '...');
+            console.log('R2 initialization disabled for deployment');
+            this.r2Enabled = false;
+            return;
         } catch (error) {
             console.error('Error initializing R2:', error);
             this.r2Enabled = false;

@@ -5,6 +5,7 @@
     "main": "server.js",
     "license": "MIT",
     "dependencies": {
+        "@ffmpeg-installer/ffmpeg": "^1.1.0",
         "airtable": "^0.12.2",
         "axios": "^1.7.9",
         "bcrypt": "^5.1.1",
