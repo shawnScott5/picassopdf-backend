@@ -5,13 +5,24 @@ import AWS from 'aws-sdk';
  */
 class LambdaService {
     constructor() {
-        this.lambda = new AWS.Lambda({
+        // Log environment variables at startup (for debugging - don't log secrets)
+        console.log('🔧 AWS Environment Check:');
+        console.log('   AWS_ACCESS_KEY_ID set:', !!process.env.AWS_ACCESS_KEY_ID);
+        console.log('   AWS_SECRET_ACCESS_KEY set:', !!process.env.AWS_SECRET_ACCESS_KEY);
+        console.log('   AWS_REGION set:', process.env.AWS_REGION);
+        console.log('   AWS_SDK_LOAD_CONFIG set:', process.env.AWS_SDK_LOAD_CONFIG);
+        
+        // Configure AWS SDK v2 for Render containers
+        AWS.config.update({
             region: process.env.AWS_REGION || 'us-east-2',
             accessKeyId: process.env.AWS_ACCESS_KEY_ID,
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
         });
         
+        this.lambda = new AWS.Lambda();
         this.functionName = process.env.LAMBDA_PDF_FUNCTION_NAME || 'picassopdf-converter';
+        
+        console.log('✅ LambdaService initialized with function:', this.functionName);
     }
 
     /**
