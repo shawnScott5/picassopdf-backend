@@ -50,7 +50,21 @@ class LambdaService {
                 Payload: JSON.stringify(payload)
             };
 
-            const result = await this.lambda.invoke(params).promise();
+            const lambdaStartTime = Date.now();
+            console.log('⏱️ Lambda invocation started...');
+            
+            // Add timeout to prevent hanging
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Lambda invocation timeout after 45 seconds')), 45000);
+            });
+            
+            const result = await Promise.race([
+                this.lambda.invoke(params).promise(),
+                timeoutPromise
+            ]);
+            
+            const lambdaEndTime = Date.now();
+            console.log(`⏱️ Lambda invocation completed in: ${lambdaEndTime - lambdaStartTime}ms`);
             
             if (result.FunctionError) {
                 throw new Error(`Lambda function error: ${result.FunctionError}`);
@@ -79,7 +93,10 @@ class LambdaService {
      */
     async isAvailable() {
         try {
+            const checkStartTime = Date.now();
             await this.lambda.getFunction({ FunctionName: this.functionName }).promise();
+            const checkEndTime = Date.now();
+            console.log(`✅ Lambda availability check took: ${checkEndTime - checkStartTime}ms`);
             return true;
         } catch (error) {
             console.log('⚠️ Lambda service not available:', error.message);

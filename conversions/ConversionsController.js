@@ -377,6 +377,12 @@ class ConversionsController {
                 return htmlContent; // Return original HTML if no API key
             }
 
+            // Quick check: if HTML is very simple (like "hello world"), skip AI processing
+            if (htmlContent.length < 500 && !htmlContent.includes('<table') && !htmlContent.includes('<div')) {
+                console.log('Skipping AI repair for simple HTML content');
+                return htmlContent;
+            }
+
             // First, check if the HTML has structural issues (broken tags, etc.)
             const hasStructuralIssues = this.detectStructuralIssues(htmlContent);
             
@@ -413,7 +419,7 @@ IMPORTANT: Respond with ONLY the corrected HTML code. Do not include any markdow
                             'Content-Type': 'application/json',
                             'X-goog-api-key': geminiApiKey
                         },
-                        timeout: 30000
+                        timeout: 10000
                     }
                 );
 
@@ -564,7 +570,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             if (htmlUrl && !htmlContent) {
                 try {
                     const response = await axios.get(htmlUrl, {
-                        timeout: 30000,
+                        timeout: 10000,
                         headers: {
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
                         }
@@ -1714,10 +1720,13 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
 
             // Check for layout repair using Gemini if ai_options.layout_repair is true
             if (layoutRepair === true) {
+                const geminiStartTime = Date.now();
                 console.log('=== AI REPAIR DEBUG (PUBLIC API) ===');
                 console.log('Original HTML before AI repair:', htmlContent.substring(0, 200) + '...');
                 console.log('Running Gemini layout repair analysis...');
                 htmlContent = await this.checkHTMLWithGemini(htmlContent);
+                const geminiEndTime = Date.now();
+                console.log(`Gemini API call took: ${geminiEndTime - geminiStartTime}ms`);
                 console.log('HTML after AI repair:', htmlContent.substring(0, 200) + '...');
                 console.log('=== END AI REPAIR DEBUG ===');
             }
@@ -1744,7 +1753,11 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
 
             // Use Puppeteer for PDF generation (handles concurrency internally)
             pdfOptions.isUrl = hasUrl; // Pass URL flag for caching decision
+            const pdfGenStartTime = Date.now();
+            console.log('Starting PDF generation...');
             const pdfBuffer = await this.generatePDF(htmlContent, pdfOptions);
+            const pdfGenEndTime = Date.now();
+            console.log(`PDF generation took: ${pdfGenEndTime - pdfGenStartTime}ms`);
 
             // Ensure directory exists before writing file
             await this.ensurePDFDirectory();
@@ -1795,6 +1808,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             const fileSize = fileStats.size;
             const endTime = Date.now();
             const processingTime = endTime - startTime;
+            console.log(`=== TOTAL CONVERSION TIME: ${processingTime}ms ===`);
 
             if (conversionRecord) {
                 conversionRecord.status = 'completed';
