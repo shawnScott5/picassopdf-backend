@@ -1675,6 +1675,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             const inputSizeBytes = html ? Buffer.byteLength(html, 'utf8') : (url ? 0 : 0);
             
             // Create log record
+            const logStartTime = Date.now();
             logRecord = new LogsSchema({
                 companyId: companyId,
                 userId: userId,
@@ -1697,6 +1698,8 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 }
             });
             await logRecord.save();
+            const logEndTime = Date.now();
+            console.log(`📝 Log record creation took: ${logEndTime - logStartTime}ms`);
 
             // Prepare HTML content
             let htmlContent;
@@ -1760,10 +1763,16 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             console.log(`PDF generation took: ${pdfGenEndTime - pdfGenStartTime}ms`);
 
             // Ensure directory exists before writing file
+            const dirStartTime = Date.now();
             await this.ensurePDFDirectory();
+            const dirEndTime = Date.now();
+            console.log(`📁 Directory check took: ${dirEndTime - dirStartTime}ms`);
             
             // Save PDF to file system
+            const fileStartTime = Date.now();
             await fsPromises.writeFile(filePath, pdfBuffer);
+            const fileEndTime = Date.now();
+            console.log(`💾 File write took: ${fileEndTime - fileStartTime}ms`);
 
             // Handle save to vault (Cloudflare R2) if requested
             let storageInfo = null;
@@ -1811,12 +1820,15 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             console.log(`=== TOTAL CONVERSION TIME: ${processingTime}ms ===`);
 
             if (conversionRecord) {
+                const dbUpdateStartTime = Date.now();
                 conversionRecord.status = 'completed';
                 conversionRecord.fileSize = fileSize;
                 conversionRecord.completedAt = new Date();
                 conversionRecord.processingTime = processingTime;
                 conversionRecord.storageInfo = storageInfo;
                 await conversionRecord.save();
+                const dbUpdateEndTime = Date.now();
+                console.log(`💾 Database update took: ${dbUpdateEndTime - dbUpdateStartTime}ms`);
             }
 
             // Get PDF page count for credits calculation
@@ -1830,12 +1842,15 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             }
 
             // Update log record
+            const logUpdateStartTime = Date.now();
             logRecord.status = 'success';
             logRecord.outputSizeBytes = fileSize;
             logRecord.generationTimeMs = processingTime;
             logRecord.creditUsed = pageCount; // Update with actual page count
             logRecord.storageRef = conversionRecord ? conversionRecord._id.toString() : null;
             await logRecord.save();
+            const logUpdateEndTime = Date.now();
+            console.log(`📝 Log record update took: ${logUpdateEndTime - logUpdateStartTime}ms`);
 
             console.log(`✅ Public API PDF conversion completed: ${fileName} (${fileSize} bytes, ${processingTime}ms)`);
 
