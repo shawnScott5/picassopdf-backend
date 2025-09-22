@@ -1935,7 +1935,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                     pdfData.id = pdfData._id;
                     
                     return pdfData;
-                });
+                }));
 
                 return res.status(200).json({
                     success: true,
