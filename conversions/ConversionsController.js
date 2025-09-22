@@ -454,13 +454,8 @@ Focus on:
 5. Missing viewport meta tags
 6. CSS that might not be PDF-friendly
 
-Rendered HTML to analyze:
-${renderedData.html}
-
-Computed styles summary:
-${JSON.stringify(renderedData.computedStyles, null, 2)}
-
-Has potential errors: ${renderedData.hasErrors}
+HTML to analyze:
+${htmlContent}
 
 IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do not include any markdown formatting, code blocks, or explanations. If no changes are needed, respond with exactly "NO_CHANGES_NEEDED".`;
 
