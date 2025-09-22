@@ -229,8 +229,8 @@ class ConversionsController {
 
             return signedUrl;
         } catch (error) {
-            console.error('Error generating signed URL:', error);
-            throw error;
+            console.error('Error generating signed URL for PDF:', fileKey, error.message);
+            return null; // Return null instead of throwing error
         }
     }
 
