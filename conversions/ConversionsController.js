@@ -26,7 +26,12 @@ const __dirname = path.dirname(__filename);
 class ConversionsController {
     constructor() {
         this.browser = null; // Not used - new browser instance per request
-        this.pdfStoragePath = path.join(__dirname, '..', '..', 'pdfs');
+        // Use /tmp for Heroku compatibility, fallback to local pdfs directory for development
+        this.pdfStoragePath = process.env.NODE_ENV === 'production' 
+            ? '/tmp' 
+            : path.join(__dirname, '..', '..', 'pdfs');
+        
+        console.log('📁 PDF Storage Path:', this.pdfStoragePath);
         this.pdfPostProcessingService = new PDFPostProcessingService();
         this.lambdaService = new LambdaService();
         this.pdfCache = new Map(); // Simple in-memory cache
@@ -51,6 +56,12 @@ class ConversionsController {
 
     ensurePDFDirectorySync() {
         try {
+            // /tmp directory always exists in Heroku, no need to create it
+            if (this.pdfStoragePath === '/tmp') {
+                console.log('Using /tmp directory for PDF storage (Heroku compatible)');
+                return;
+            }
+            
             if (!existsSync(this.pdfStoragePath)) {
                 fs.mkdirSync(this.pdfStoragePath, { recursive: true });
                 console.log('PDF storage directory created (sync):', this.pdfStoragePath);
