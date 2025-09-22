@@ -1,0 +1,16 @@
+{
+    "name": "picassopdf-lambda-converter",
+    "version": "1.0.0",
+    "description": "AWS Lambda function for PDF conversion using Playwright",
+    "main": "index.js",
+    "scripts": {
+        "build": "npm install && npx playwright install chromium",
+        "deploy": "npm run build && zip -r function.zip ."
+    },
+    "dependencies": {
+        "playwright": "^1.49.1"
+    },
+    "engines": {
+        "node": "20.x"
+    }
+}

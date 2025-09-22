@@ -16,7 +16,7 @@ const ConversionsSchema = new mongoose.Schema({
   dataType: {
     type: String,
     required: true,
-    enum: ['html', 'grapesjs', 'raw'] // Simplified to focus on raw content
+    enum: ['html', 'grapesjs', 'raw', 'url'] // Added 'url' for URL-to-PDF conversion
   },
   fileName: {
     type: String,

@@ -2,7 +2,7 @@ import ConversionsSchema from './ConversionsSchema.js';
 import LogsSchema from './LogsSchema.js';
 import UserSchema from '../users/UserSchema.js';
 import PDFPostProcessingService from '../services/PDFPostProcessingService.js';
-import { chromium } from 'playwright';
+import LambdaService from '../services/LambdaService.js';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
@@ -21,85 +21,21 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/**
- * Get Chromium executable path for Heroku environment
- */
-function getChromiumExecPath() {
-    // Heroku sets GOOGLE_CHROME_BIN environment variable
-    if (process.env.GOOGLE_CHROME_BIN) {
-        console.log("✅ Using Heroku Chromium:", process.env.GOOGLE_CHROME_BIN);
-        return process.env.GOOGLE_CHROME_BIN;
-    }
-    
-    // Fallback for local development or other environments
-    const candidates = ["/usr/bin/chromium", "/usr/bin/chromium-browser"];
-    for (const p of candidates) {
-        if (existsSync(p)) {
-            console.log("✅ Using system Chromium:", p);
-            return p;
-        }
-    }
-    throw new Error("❌ Chromium not found in container");
-}
 
-/**
- * Launch browser optimized for Heroku Chrome buildpack
- */
-async function launchBrowser() {
-    // Priority 1: Heroku Chrome buildpack (GOOGLE_CHROME_BIN)
-    if (process.env.GOOGLE_CHROME_BIN) {
-        try {
-            console.log('🚀 Using Heroku Chrome buildpack:', process.env.GOOGLE_CHROME_BIN);
-            return await chromium.launch({
-                headless: true,
-                executablePath: process.env.GOOGLE_CHROME_BIN,
-                args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-            });
-        } catch (error) {
-            console.log('⚠️ Heroku Chrome failed:', error.message);
-            console.log('🔄 Falling back to system Chromium');
-        }
-    }
-    
-    // Priority 2: System Chromium (Docker/local development)
-    try {
-        const execPath = getChromiumExecPath();
-        console.log('🐳 Using system Chromium:', execPath);
-        return await chromium.launch({
-            headless: true,
-            executablePath: execPath,
-            args: ["--no-sandbox", "--disable-setuid-sandbox"],
-        });
-    } catch (error) {
-        console.log('⚠️ System Chromium failed:', error.message);
-        console.log('🔄 Falling back to Playwright bundled browser');
-    }
-    
-    // Priority 3: Playwright bundled browser (development fallback)
-    try {
-        console.log('🎭 Using Playwright bundled browser...');
-        return await chromium.launch({
-            headless: true,
-            args: ["--no-sandbox", "--disable-setuid-sandbox"],
-        });
-    } catch (error) {
-        console.error('❌ All browser options failed:', error.message);
-        throw new Error(`Browser launch failed: ${error.message}. Please check your deployment configuration.`);
-    }
-}
 
 class ConversionsController {
     constructor() {
-        this.browser = null; // Single Playwright browser for everything
+        this.browser = null; // Not used - new browser instance per request
         this.pdfStoragePath = path.join(__dirname, '..', '..', 'pdfs');
         this.pdfPostProcessingService = new PDFPostProcessingService();
+        this.lambdaService = new LambdaService();
         this.pdfCache = new Map(); // Simple in-memory cache
         this.maxCacheSize = 100; // Maximum number of cached PDFs
         this.cacheExpiry = 10 * 60 * 1000; // 10 minutes
         this.queueService = null; // Will be initialized conditionally
         this.ensurePDFDirectory();
         this.initializeR2();
-        // Initialize Playwright browser for full HTML/CSS/JS rendering
+        // Initialize PDF generation system
         this.initQueue();
     }
 
@@ -112,56 +48,6 @@ class ConversionsController {
         }
     }
 
-    async initBrowser() {
-        // Check if browser exists and is still alive
-        if (this.browser) {
-            try {
-                // Test if browser is still connected
-                const pages = await this.browser.pages();
-                return this.browser;
-            } catch (error) {
-                console.log('🔄 Browser was closed, creating new one...');
-                this.browser = null;
-            }
-        }
-
-        // Create new browser instance
-        try {
-            // Use system-installed Chromium on Render/Docker
-            const launchOptions = {
-                headless: true,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--disable-web-security',
-                    '--disable-features=VizDisplayCompositor',
-                    '--single-process',
-                    '--no-zygote',
-                    '--disable-background-timer-throttling',
-                    '--disable-backgrounding-occluded-windows',
-                    '--disable-renderer-backgrounding',
-                    '--memory-pressure-off',
-                    '--max_old_space_size=4096'
-                ]
-            };
-
-            // On Render/Docker, use system Chromium
-            if (process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1') {
-                launchOptions.executablePath = '/usr/bin/chromium';
-                console.log('🐳 Using system-installed Chromium (Docker/Render)');
-            }
-
-            this.browser = await chromium.launch(launchOptions);
-            console.log('✅ Playwright browser ready - optimized for Render deployment');
-            return this.browser;
-        } catch (error) {
-            console.error('Playwright browser failed:', error);
-            this.browser = null;
-            throw error;
-        }
-    }
 
     initializeR2() {
         try {
@@ -376,12 +262,14 @@ class ConversionsController {
     }
 
     /**
-     * PDF generation using Playwright (handles concurrency internally)
+     * PDF generation using AWS Lambda (primary) or Playwright (fallback)
      */
-    async generatePDF(htmlContent, options = {}) {
+    async generatePDF(htmlOrUrl, options = {}) {
+        const isUrl = options.isUrl || false;
+
         // Check cache first (skip for URLs to avoid stale content)
-        if (!options.isUrl) {
-            const cacheKey = this.generateCacheKey(htmlContent, options);
+        if (!isUrl) {
+            const cacheKey = this.generateCacheKey(htmlOrUrl, options);
             const cachedPDF = this.getCachedPDF(cacheKey);
             if (cachedPDF) {
                 console.log('✅ Serving PDF from cache:', cacheKey.substring(0, 8) + '...');
@@ -391,79 +279,21 @@ class ConversionsController {
                        `(${this.pdfCache.size}/${this.maxCacheSize})`);
         }
 
-        // Use Playwright for full HTML/CSS/JS rendering
-        console.log('📝 Generating PDF using Playwright...');
-        
-        let browser = null;
-        let context = null;
-        let page = null;
-            
-        try {
-            // Create a completely fresh browser instance for each request
-            browser = await launchBrowser();
-            
-            // Create a new context and page for complete isolation
-            context = await browser.newContext();
-            page = await context.newPage();
-            
-            if (options.isUrl) {
-                // URL request - navigate directly
-                console.log('🌐 URL request detected - navigating to URL');
-                await page.goto(htmlContent, { 
-                    waitUntil: 'networkidle0',
-                    timeout: 30000 
-                });
-            } else {
-                // HTML content - set content directly
-                console.log('📄 HTML content detected - setting content');
-            await page.setContent(htmlContent, { 
-                    waitUntil: 'networkidle0',
-                    timeout: 30000 
-                });
-            }
-            
-            // Generate PDF
-            const pdfBuffer = await page.pdf({
-                format: options.format || 'A4',
-                printBackground: true,
-                margin: options.margin || {
-                    top: '20px',
-                    right: '20px',
-                    bottom: '20px',
-                    left: '20px'
-                }
-            });
-            
-            console.log(`📄 PDF generated: ${pdfBuffer.length} bytes`);
-            return pdfBuffer;
-
-        } catch (error) {
-            console.error('Error in generatePDF:', error);
-            throw error;
-        } finally {
-            // Always clean up - close page, context, and browser
-            if (page) {
-                try {
-                    await page.close();
-                } catch (e) {
-                    console.log('Page already closed');
-                }
-            }
-            if (context) {
-                try {
-                    await context.close();
-                } catch (e) {
-                    console.log('Context already closed');
-                }
-            }
-            if (browser) {
-                try {
-                    await browser.close();
-                } catch (e) {
-                    console.log('Browser already closed');
-                }
+        // Try Lambda first (if available)
+        if (await this.lambdaService.isAvailable()) {
+            try {
+                console.log('🚀 Using AWS Lambda for PDF conversion...');
+                const pdfBuffer = await this.lambdaService.convertToPDF(htmlOrUrl, options);
+                return pdfBuffer;
+            } catch (error) {
+                console.log('⚠️ Lambda conversion failed:', error.message);
+                throw new Error(`PDF generation failed: ${error.message}. Please try again in a few moments.`);
             }
         }
+
+        // Lambda not available - throw error instead of falling back to Playwright
+        console.log('❌ AWS Lambda service not available');
+        throw new Error('PDF generation service is temporarily unavailable. Please try again in a few moments.');
     }
 
 
@@ -1158,7 +988,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
 
     async renderHTMLToPDF(html, css, options = {}) {
         try {
-            // Use Playwright for PDF generation with full HTML/CSS/JS rendering
+            // Use Puppeteer for PDF generation with full HTML/CSS/JS rendering
             const pdfBuffer = await this.generatePDF(html, options);
             return pdfBuffer;
         } catch (error) {
@@ -1839,7 +1669,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 footerTemplate: options.footerTemplate || '<div style="font-size: 10px; text-align: center; width: 100%;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>'
             };
 
-            // Use Playwright for PDF generation (handles concurrency internally)
+            // Use Puppeteer for PDF generation (handles concurrency internally)
             pdfOptions.isUrl = hasUrl; // Pass URL flag for caching decision
             const pdfBuffer = await this.generatePDF(htmlContent, pdfOptions);
 

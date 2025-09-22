@@ -189,19 +189,11 @@ const server = app.listen(PORT, () => {
     console.log(`🔧 Process ID: ${process.pid}`);
     console.log(`💾 Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
     
-           // Check for Chromium availability
-           if (process.env.GOOGLE_CHROME_BIN) {
-               console.log("🚀 Heroku Chrome buildpack found at:", process.env.GOOGLE_CHROME_BIN);
-               console.log("✅ Ready for PDF generation with Heroku Chrome");
-           } else {
-               try {
-                   const chromiumPath = execSync("which chromium || which chromium-browser").toString().trim();
-                   console.log("🖥️ System Chromium found at:", chromiumPath);
-               } catch (error) {
-                   console.log("❌ No system Chromium found");
-                   console.log("🔍 Will fall back to Playwright bundled browser");
-               }
-           }
+           // Check service availability
+           console.log("🏗️ Architecture: Heroku + AWS Lambda");
+           console.log("🚀 Primary: AWS Lambda for PDF conversion");
+           console.log("🎭 Fallback: Playwright with new browser instance per request");
+           console.log("✅ Ready for PDF generation");
 });
 
 // Graceful shutdown handling
