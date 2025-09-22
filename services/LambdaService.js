@@ -6,7 +6,7 @@ import AWS from 'aws-sdk';
 class LambdaService {
     constructor() {
         this.lambda = new AWS.Lambda({
-            region: process.env.AWS_REGION || 'us-east-1',
+            region: process.env.AWS_REGION || 'us-east-2',
             accessKeyId: process.env.AWS_ACCESS_KEY_ID,
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
         });
@@ -22,26 +22,28 @@ class LambdaService {
             console.log('🚀 Calling Lambda PDF converter...');
             
             const payload = {
-                html: options.isUrl ? undefined : htmlOrUrl,
-                url: options.isUrl ? htmlOrUrl : undefined,
-                options: {
-                    format: options.format || 'A4',
-                    margin: options.margin || {
-                        top: '20px',
-                        right: '20px',
-                        bottom: '20px',
-                        left: '20px'
-                    },
-                    landscape: options.landscape || false,
-                    filename: options.filename || 'document.pdf',
-                    displayHeaderFooter: options.displayHeaderFooter || false,
-                    headerTemplate: options.headerTemplate || '<div></div>',
-                    footerTemplate: options.footerTemplate || '<div></div>',
-                    scale: options.scale || 1.0,
-                    pageRanges: options.pageRanges || '',
-                    width: options.width,
-                    height: options.height
-                }
+                body: JSON.stringify({
+                    html: options.isUrl ? undefined : htmlOrUrl,
+                    url: options.isUrl ? htmlOrUrl : undefined,
+                    options: {
+                        format: options.format || 'A4',
+                        margin: options.margin || {
+                            top: '20px',
+                            right: '20px',
+                            bottom: '20px',
+                            left: '20px'
+                        },
+                        landscape: options.landscape || false,
+                        filename: options.filename || 'document.pdf',
+                        displayHeaderFooter: options.displayHeaderFooter || false,
+                        headerTemplate: options.headerTemplate || '<div></div>',
+                        footerTemplate: options.footerTemplate || '<div></div>',
+                        scale: options.scale || 1.0,
+                        pageRanges: options.pageRanges || '',
+                        width: options.width,
+                        height: options.height
+                    }
+                })
             };
 
             const params = {
