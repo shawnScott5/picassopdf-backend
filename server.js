@@ -156,26 +156,26 @@ app.get('/v1/status', async (req, res) => {
     }
 });
 
-app.use('/api/actions', ActionsRoute);
-app.use('/api/admin', AdminRoute);
-app.use('/api/campaigns', CampaingsRoute);
-app.use('/api/users', UserRoute);
-app.use('/api/influencers', InfluencersRoute);
-app.use('/api/lists', ListsRoute);
-app.use('/api/events', EventsRoute);
-app.use('/api/tasks', TasksRoute);
-app.use('/api/notes', NotesRoute);
-app.use('/api/uploads', UploadsRoute);
-app.use('/api/subscribe', SubscribeRoute);
-app.use('/api/subscribe-stripe-pro', SubscribeStripeRoute);
-app.use('/api/subscribe-stripe-scale', SubscribeStripeScaleRoute);
-app.use('/api/subscribe-stripe-custom', SubscribeStripeCustomRoute);
-app.use('/api/audiobooks', AudiobookRoute);
-app.use('/api/conversions', ConversionsRoute);
-app.use('/api/v1', ConversionsRoute);
-app.use('/api/logs', LogsRoute);
-app.use('/api/api-keys', ApiKeysRoute);
-app.use('/api/organizations', OrganizationRoute);
+app.use('/actions', ActionsRoute);
+app.use('/admin', AdminRoute);
+app.use('/campaigns', CampaingsRoute);
+app.use('/users', UserRoute);
+app.use('/influencers', InfluencersRoute);
+app.use('/lists', ListsRoute);
+app.use('/events', EventsRoute);
+app.use('/tasks', TasksRoute);
+app.use('/notes', NotesRoute);
+app.use('/uploads', UploadsRoute);
+app.use('/subscribe', SubscribeRoute);
+app.use('/subscribe-stripe-pro', SubscribeStripeRoute);
+app.use('/subscribe-stripe-scale', SubscribeStripeScaleRoute);
+app.use('/subscribe-stripe-custom', SubscribeStripeCustomRoute);
+app.use('/audiobooks', AudiobookRoute);
+app.use('/conversions', ConversionsRoute);
+app.use('/v1', ConversionsRoute);
+app.use('/logs', LogsRoute);
+app.use('/api-keys', ApiKeysRoute);
+app.use('/organizations', OrganizationRoute);
 
 // Frontend is deployed separately (Netlify), no static file serving needed
 
