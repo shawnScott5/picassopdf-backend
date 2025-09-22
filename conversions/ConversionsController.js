@@ -1898,7 +1898,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
         
             if(pdfs?.length) {
                 // Transform the data to include download URLs for frontend
-                const transformedPdfs = pdfs.map(pdf => {
+                const transformedPdfs = await Promise.all(pdfs.map(async (pdf) => {
                     const pdfData = pdf.toObject();
                     
                     // Add download URL based on storage type
