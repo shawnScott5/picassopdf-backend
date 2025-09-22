@@ -1893,6 +1893,15 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
         }
 
         try {
+            // Add filter to exclude records that shouldn't be in the vault
+            // Only show records that have valid storage info (not null and not 'none')
+            query.$and.push({
+                $and: [
+                    { storageInfo: { $exists: true, $ne: null } },
+                    { 'storageInfo.storageType': { $ne: 'none' } }
+                ]
+            });
+
             const pdfs = await ConversionsSchema.find(query)
             .sort({ completedAt: -1 }) // Sort by completedAt descending (newest first)
             .skip((filter && filter.page) ? parseInt(filter.limit) * (parseInt(filter.page) - 1) : 0)
