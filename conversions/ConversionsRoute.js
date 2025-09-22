@@ -46,16 +46,16 @@ ConversionsRoute.delete('/:id', authenticate, async (req, res, next) => {
 // Public API v1 endpoint for external developers
 // POST /v1/convert/pdf - Convert HTML to PDF with API key authentication
 ConversionsRoute.post('/convert/pdf', apiKeyAuth, async (req, res, next) => {
-    // Set timeout for the request (60 seconds)
+    // Set timeout for the request (5 minutes for large documents)
     const timeout = setTimeout(() => {
         if (!res.headersSent) {
             res.status(408).json({
                 success: false,
-                message: 'Request timeout - PDF generation took too long',
+                message: 'Request timeout - PDF generation took too long (5+ minutes)',
                 error: 'TIMEOUT'
             });
         }
-    }, 60000);
+    }, 300000);
 
     try {
         await conversionsController.convertHTMLToPDFAPIPublic(req, res, next);

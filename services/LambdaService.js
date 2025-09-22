@@ -53,9 +53,9 @@ class LambdaService {
             const lambdaStartTime = Date.now();
             console.log('⏱️ Lambda invocation started...');
             
-            // Add timeout to prevent hanging
+            // Add timeout to prevent hanging (increased for large documents)
             const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Lambda invocation timeout after 45 seconds')), 45000);
+                setTimeout(() => reject(new Error('Lambda invocation timeout after 5 minutes')), 300000);
             });
             
             const result = await Promise.race([
