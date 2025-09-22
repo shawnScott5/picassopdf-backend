@@ -8,7 +8,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { promises as fsPromises, existsSync } from 'fs';
-import AWS from 'aws-sdk'; // Re-enabled for R2 storage
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import * as cheerio from 'cheerio';
@@ -93,12 +94,14 @@ class ConversionsController {
                 this.r2AccountId = process.env.R2_ACCOUNT_ID;
                 this.r2BucketName = process.env.R2_BUCKET_NAME;
                 
-                // Configure S3-compatible client for R2
-                this.s3 = new AWS.S3({
-                    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-                    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-                    region: 'auto', // R2 uses 'auto' region
-                    endpoint: `https://${this.r2AccountId}.r2.cloudflarestorage.com`
+                // Configure S3-compatible client for R2 using AWS SDK v3
+                this.s3 = new S3Client({
+                    endpoint: `https://${this.r2AccountId}.r2.cloudflarestorage.com`,
+                    region: 'auto',
+                    credentials: {
+                        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+                        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY
+                    }
                 });
                 
                 console.log('✅ R2 storage enabled');
@@ -131,44 +134,44 @@ class ConversionsController {
             console.log('R2 Bucket:', this.r2BucketName);
             console.log('File Name:', fileName);
             console.log('Buffer Size:', pdfBuffer.length);
-            console.log('S3 Endpoint:', this.s3.config.endpoint);
 
-            const uploadParams = {
+            const key = `pdfs/${fileName}`;
+            const uploadCommand = new PutObjectCommand({
                 Bucket: this.r2BucketName,
-                Key: `pdfs/${fileName}`,
+                Key: key,
                 Body: pdfBuffer,
                 ContentType: 'application/pdf',
-                // Remove ACL for R2 compatibility - R2 doesn't support ACL
                 Metadata: {
                     'uploaded-by': 'primepdf-api',
                     'upload-timestamp': new Date().toISOString()
                 }
-            };
-
-            console.log('Upload Params:', {
-                Bucket: uploadParams.Bucket,
-                Key: uploadParams.Key,
-                ContentType: uploadParams.ContentType,
-                BodySize: uploadParams.Body.length
             });
 
-            const result = await this.s3.upload(uploadParams).promise();
+            console.log('Upload Command:', {
+                Bucket: uploadCommand.input.Bucket,
+                Key: uploadCommand.input.Key,
+                ContentType: uploadCommand.input.ContentType,
+                BodySize: uploadCommand.input.Body.length
+            });
+
+            const result = await this.s3.send(uploadCommand);
             console.log('PDF uploaded to R2 successfully:', result.Location);
             
             // Generate a signed URL that's valid for 7 days
-            const signedUrl = this.s3.getSignedUrl('getObject', {
+            const getCommand = new GetObjectCommand({
                 Bucket: this.r2BucketName,
-                Key: result.Key,
-                Expires: 7 * 24 * 60 * 60 // 7 days in seconds
+                Key: key
             });
+            
+            const signedUrl = await getSignedUrl(this.s3, getCommand, { expiresIn: 7 * 24 * 60 * 60 });
             
             console.log('Generated signed URL:', signedUrl);
             console.log('=== END R2 UPLOAD DEBUG ===');
             
             return {
                 success: true,
-                url: signedUrl, // Use signed URL instead of private URL
-                key: result.Key,
+                url: signedUrl,
+                key: key,
                 bucket: this.r2BucketName
             };
         } catch (error) {
@@ -214,17 +217,20 @@ class ConversionsController {
     }
 
     // Generate a signed URL for an existing R2 file
-    generateSignedUrl(fileKey, expiresInDays = 7) {
+    async generateSignedUrl(fileKey, expiresInDays = 7) {
         try {
             if (!this.r2Enabled) {
                 console.log('⚠️ R2 not enabled - cannot generate signed URL for:', fileKey);
                 return null; // Return null instead of throwing error
             }
 
-            const signedUrl = this.s3.getSignedUrl('getObject', {
+            const getCommand = new GetObjectCommand({
                 Bucket: this.r2BucketName,
-                Key: fileKey,
-                Expires: expiresInDays * 24 * 60 * 60 // Convert days to seconds
+                Key: fileKey
+            });
+
+            const signedUrl = await getSignedUrl(this.s3, getCommand, { 
+                expiresIn: expiresInDays * 24 * 60 * 60 
             });
 
             return signedUrl;
@@ -1899,7 +1905,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                     if (pdfData.storageInfo && pdfData.storageInfo.storageType === 'r2') {
                         // Generate a fresh signed URL for R2 files
                         try {
-                            pdfData.downloadUrl = conversionsController.generateSignedUrl(pdfData.storageInfo.r2Key);
+                            pdfData.downloadUrl = await conversionsController.generateSignedUrl(pdfData.storageInfo.r2Key);
                             if (!pdfData.downloadUrl) {
                                 console.log('⚠️ R2 not available for PDF:', pdfData._id, '- download URL not available');
                             }
