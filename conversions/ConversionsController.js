@@ -76,6 +76,13 @@ class ConversionsController {
 
     initializeR2() {
         try {
+            console.log('=== R2 INITIALIZATION DEBUG ===');
+            console.log('Environment check:');
+            console.log('  R2_ACCOUNT_ID:', process.env.R2_ACCOUNT_ID ? 'SET' : 'NOT SET');
+            console.log('  R2_ACCESS_KEY_ID:', process.env.R2_ACCESS_KEY_ID ? 'SET' : 'NOT SET');
+            console.log('  R2_SECRET_ACCESS_KEY:', process.env.R2_SECRET_ACCESS_KEY ? 'SET' : 'NOT SET');
+            console.log('  R2_BUCKET_NAME:', process.env.R2_BUCKET_NAME || 'NOT SET');
+            
             // Check if R2 environment variables are available
             if (process.env.R2_ACCOUNT_ID && 
                 process.env.R2_ACCESS_KEY_ID && 
@@ -95,10 +102,19 @@ class ConversionsController {
                 });
                 
                 console.log('✅ R2 storage enabled');
+                console.log('  Bucket:', this.r2BucketName);
+                console.log('  Account ID:', this.r2AccountId);
+                console.log('  Endpoint:', `https://${this.r2AccountId}.r2.cloudflarestorage.com`);
             } else {
                 console.log('❌ R2 storage disabled - missing environment variables');
+                console.log('Missing variables:');
+                if (!process.env.R2_ACCOUNT_ID) console.log('  - R2_ACCOUNT_ID');
+                if (!process.env.R2_ACCESS_KEY_ID) console.log('  - R2_ACCESS_KEY_ID');
+                if (!process.env.R2_SECRET_ACCESS_KEY) console.log('  - R2_SECRET_ACCESS_KEY');
+                if (!process.env.R2_BUCKET_NAME) console.log('  - R2_BUCKET_NAME');
                 this.r2Enabled = false;
             }
+            console.log('=== END R2 INITIALIZATION DEBUG ===');
         } catch (error) {
             console.error('Error initializing R2:', error);
             this.r2Enabled = false;
