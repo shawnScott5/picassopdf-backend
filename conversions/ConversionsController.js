@@ -33,10 +33,11 @@ class ConversionsController {
         this.maxCacheSize = 100; // Maximum number of cached PDFs
         this.cacheExpiry = 10 * 60 * 1000; // 10 minutes
         this.queueService = null; // Will be initialized conditionally
-        this.ensurePDFDirectory();
         this.initializeR2();
         // Initialize PDF generation system
         this.initQueue();
+        // Ensure PDF directory exists (synchronous version)
+        this.ensurePDFDirectorySync();
     }
 
     async ensurePDFDirectory() {
@@ -45,6 +46,19 @@ class ConversionsController {
             console.log('PDF storage directory ensured:', this.pdfStoragePath);
         } catch (error) {
             console.error('Error creating PDF directory:', error);
+        }
+    }
+
+    ensurePDFDirectorySync() {
+        try {
+            if (!existsSync(this.pdfStoragePath)) {
+                fs.mkdirSync(this.pdfStoragePath, { recursive: true });
+                console.log('PDF storage directory created (sync):', this.pdfStoragePath);
+            } else {
+                console.log('PDF storage directory exists:', this.pdfStoragePath);
+            }
+        } catch (error) {
+            console.error('Error creating PDF directory (sync):', error);
         }
     }
 
@@ -1699,6 +1713,9 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             pdfOptions.isUrl = hasUrl; // Pass URL flag for caching decision
             const pdfBuffer = await this.generatePDF(htmlContent, pdfOptions);
 
+            // Ensure directory exists before writing file
+            await this.ensurePDFDirectory();
+            
             // Save PDF to file system
             await fsPromises.writeFile(filePath, pdfBuffer);
 
