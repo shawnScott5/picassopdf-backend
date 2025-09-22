@@ -1458,37 +1458,40 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             const fileName = `api-conversion-${timestamp}.pdf`;
             const filePath = path.join(this.pdfStoragePath, fileName);
 
-            // Create conversion record
-            conversionRecord = new ConversionsSchema({
-                companyId: companyId,
-                userId: userId,
-                fileName: fileName,
-                filePath: filePath,
-                fileSize: 0,
-                dataType: hasUrl ? 'url' : 'html',
-                sourceType: hasUrl ? 'upload' : 'raw',
-                status: 'queued',
-                createdAt: new Date(),
-                metadata: {
-                    apiKeyId: req.apiKey._id,
-                    source: 'public_api_v1_async',
-                    hasCSS: !!css,
-                    hasJavaScript: !!javascript,
-                    originalUrl: url || null,
-                    saveToVault: options.save_to_vault || false,
-                    layoutRepair: ai_options.layout_repair || false,
-                    options: options,
-                    aiOptions: ai_options
-                }
-            });
-            await conversionRecord.save();
+            // Create conversion record only if saveToVault is true
+            const saveToVault = options.save_to_vault || false;
+            if (saveToVault) {
+                conversionRecord = new ConversionsSchema({
+                    companyId: companyId,
+                    userId: userId,
+                    fileName: fileName,
+                    filePath: filePath,
+                    fileSize: 0,
+                    dataType: hasUrl ? 'url' : 'html',
+                    sourceType: hasUrl ? 'upload' : 'raw',
+                    status: 'queued',
+                    createdAt: new Date(),
+                    metadata: {
+                        apiKeyId: req.apiKey._id,
+                        source: 'public_api_v1_async',
+                        hasCSS: !!css,
+                        hasJavaScript: !!javascript,
+                        originalUrl: url || null,
+                        saveToVault: saveToVault,
+                        layoutRepair: ai_options.layout_repair || false,
+                        options: options,
+                        aiOptions: ai_options
+                    }
+                });
+                await conversionRecord.save();
+            }
 
             // Create log record
             const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
             logRecord = new LogsSchema({
                 companyId: companyId,
                 userId: userId,
-                conversionId: conversionRecord._id,
+                conversionId: conversionRecord ? conversionRecord._id : null,
                 requestId: requestId,
                 timestamp: new Date(),
                 status: 'queued',
@@ -1502,7 +1505,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 metadata: {
                     apiKeyId: req.apiKey._id,
                     source: 'public_api_v1_async',
-                    saveToVault: options.save_to_vault || false,
+                    saveToVault: saveToVault,
                     layoutRepair: ai_options.layout_repair || false
                 }
             });
@@ -1535,7 +1538,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 status: 'queued',
                 estimatedWaitTime: jobResult.estimatedWaitTime,
                 statusUrl: `/api/v1/jobs/${jobResult.jobId}`,
-                conversionId: conversionRecord._id,
+                conversionId: conversionRecord ? conversionRecord._id : null,
                 requestId: requestId
             });
 
@@ -1637,30 +1640,32 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             const fileName = `api-conversion-${timestamp}.pdf`;
             const filePath = path.join(this.pdfStoragePath, fileName);
 
-            // Create conversion record for tracking
-            conversionRecord = new ConversionsSchema({
-                companyId: companyId,
-                userId: userId,
-                fileName: fileName,
-                filePath: filePath,
-                fileSize: 0, // Will be updated after conversion
-                dataType: hasUrl ? 'url' : 'html',
-                sourceType: hasUrl ? 'upload' : 'raw',
-                status: 'processing',
-                createdAt: new Date(),
-                metadata: {
-                    apiKeyId: req.apiKey._id,
-                    source: 'public_api_v1',
-                    hasCSS: !!css,
-                    hasJavaScript: !!javascript,
-                    originalUrl: url || null,
-                    saveToVault: saveToVault,
-                    layoutRepair: layoutRepair,
-                    options: options,
-                    aiOptions: ai_options
-                }
-            });
-            await conversionRecord.save();
+            // Create conversion record only if saveToVault is true
+            if (saveToVault) {
+                conversionRecord = new ConversionsSchema({
+                    companyId: companyId,
+                    userId: userId,
+                    fileName: fileName,
+                    filePath: filePath,
+                    fileSize: 0, // Will be updated after conversion
+                    dataType: hasUrl ? 'url' : 'html',
+                    sourceType: hasUrl ? 'upload' : 'raw',
+                    status: 'processing',
+                    createdAt: new Date(),
+                    metadata: {
+                        apiKeyId: req.apiKey._id,
+                        source: 'public_api_v1',
+                        hasCSS: !!css,
+                        hasJavaScript: !!javascript,
+                        originalUrl: url || null,
+                        saveToVault: saveToVault,
+                        layoutRepair: layoutRepair,
+                        options: options,
+                        aiOptions: ai_options
+                    }
+                });
+                await conversionRecord.save();
+            }
 
             // Generate unique request ID
             const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -1672,7 +1677,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             logRecord = new LogsSchema({
                 companyId: companyId,
                 userId: userId,
-                conversionId: conversionRecord._id,
+                conversionId: conversionRecord ? conversionRecord._id : null,
                 requestId: requestId,
                 timestamp: new Date(),
                 status: 'processing',
@@ -1790,18 +1795,20 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             }
             console.log('=== END STORAGE DECISION DEBUG ===');
 
-            // Update conversion record with success
+            // Update conversion record with success only if it exists
             const fileStats = await fsPromises.stat(filePath);
             const fileSize = fileStats.size;
             const endTime = Date.now();
             const processingTime = endTime - startTime;
 
-            conversionRecord.status = 'completed';
-            conversionRecord.fileSize = fileSize;
-            conversionRecord.completedAt = new Date();
-            conversionRecord.processingTime = processingTime;
-            conversionRecord.storageInfo = storageInfo;
-            await conversionRecord.save();
+            if (conversionRecord) {
+                conversionRecord.status = 'completed';
+                conversionRecord.fileSize = fileSize;
+                conversionRecord.completedAt = new Date();
+                conversionRecord.processingTime = processingTime;
+                conversionRecord.storageInfo = storageInfo;
+                await conversionRecord.save();
+            }
 
             // Get PDF page count for credits calculation
             let pageCount = 1; // Default to 1 page if we can't determine
@@ -1818,7 +1825,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             logRecord.outputSizeBytes = fileSize;
             logRecord.generationTimeMs = processingTime;
             logRecord.creditUsed = pageCount; // Update with actual page count
-            logRecord.storageRef = saveToVault && conversionRecord ? conversionRecord._id.toString() : null;
+            logRecord.storageRef = conversionRecord ? conversionRecord._id.toString() : null;
             await logRecord.save();
 
             console.log(`✅ Public API PDF conversion completed: ${fileName} (${fileSize} bytes, ${processingTime}ms)`);
@@ -1839,7 +1846,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             if (conversionRecord) {
                 try {
                     conversionRecord.status = 'failed';
-                    conversionRecord.error = error.message;
+                    conversionRecord.errorMessage = error.message;
                     await conversionRecord.save();
                 } catch (saveError) {
                     console.error('Error updating conversion record:', saveError);
@@ -1849,8 +1856,8 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             if (logRecord) {
                 try {
                     logRecord.status = 'failed';
-                    logRecord.error = error.message;
-                    logRecord.processingTime = Date.now() - startTime;
+                    logRecord.errorMessage = error.message;
+                    logRecord.generationTimeMs = Date.now() - startTime;
                     await logRecord.save();
                 } catch (saveError) {
                     console.error('Error updating log record:', saveError);
