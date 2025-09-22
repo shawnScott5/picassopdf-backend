@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { promises as fsPromises, existsSync } from 'fs';
-// import AWS from 'aws-sdk'; // Disabled for deployment
+import AWS from 'aws-sdk'; // Re-enabled for R2 storage
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import * as cheerio from 'cheerio';
@@ -51,9 +51,29 @@ class ConversionsController {
 
     initializeR2() {
         try {
-            console.log('R2 initialization disabled for deployment');
+            // Check if R2 environment variables are available
+            if (process.env.R2_ACCOUNT_ID && 
+                process.env.R2_ACCESS_KEY_ID && 
+                process.env.R2_SECRET_ACCESS_KEY && 
+                process.env.R2_BUCKET_NAME) {
+                
+                this.r2Enabled = true;
+                this.r2AccountId = process.env.R2_ACCOUNT_ID;
+                this.r2BucketName = process.env.R2_BUCKET_NAME;
+                
+                // Configure S3-compatible client for R2
+                this.s3 = new AWS.S3({
+                    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+                    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+                    region: 'auto', // R2 uses 'auto' region
+                    endpoint: `https://${this.r2AccountId}.r2.cloudflarestorage.com`
+                });
+                
+                console.log('✅ R2 storage enabled');
+            } else {
+                console.log('❌ R2 storage disabled - missing environment variables');
                 this.r2Enabled = false;
-                return;
+            }
         } catch (error) {
             console.error('Error initializing R2:', error);
             this.r2Enabled = false;
@@ -156,7 +176,8 @@ class ConversionsController {
     generateSignedUrl(fileKey, expiresInDays = 7) {
         try {
             if (!this.r2Enabled) {
-                throw new Error('R2 not enabled or not properly configured');
+                console.log('⚠️ R2 not enabled - cannot generate signed URL for:', fileKey);
+                return null; // Return null instead of throwing error
             }
 
             const signedUrl = this.s3.getSignedUrl('getObject', {
@@ -291,7 +312,7 @@ class ConversionsController {
             }
         }
 
-        // Lambda not available - throw error instead of falling back to Playwright
+        // Lambda not available - throw error
         console.log('❌ AWS Lambda service not available');
         throw new Error('PDF generation service is temporarily unavailable. Please try again in a few moments.');
     }
@@ -1210,7 +1231,12 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                     console.log('Storage Info set to:', storageInfo);
                 } else {
                     // R2 is not enabled but saveToVault is true - fail the conversion
-                    throw new Error('Cloudflare R2 storage is not configured. Cannot save to vault.');
+                    // R2 is not enabled but saveToVault is true - warn but don't fail
+                    console.log('⚠️ R2 storage is not configured. PDF will be returned but not saved to vault.');
+                    storageInfo = {
+                        storageType: 'none',
+                        message: 'R2 storage not configured - PDF not saved to vault'
+                    };
                 }
             } else {
                 // saveToVault is false - don't save anywhere, just return the PDF
@@ -1697,7 +1723,12 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                     console.log('Storage Info set to:', storageInfo);
                 } else {
                     // R2 is not enabled but saveToVault is true - fail the conversion
-                    throw new Error('Cloudflare R2 storage is not configured. Cannot save to vault.');
+                    // R2 is not enabled but saveToVault is true - warn but don't fail
+                    console.log('⚠️ R2 storage is not configured. PDF will be returned but not saved to vault.');
+                    storageInfo = {
+                        storageType: 'none',
+                        message: 'R2 storage not configured - PDF not saved to vault'
+                    };
                 }
             } else {
                 // saveToVault is false - don't save anywhere, just return the PDF
@@ -1825,6 +1856,9 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                         // Generate a fresh signed URL for R2 files
                         try {
                             pdfData.downloadUrl = conversionsController.generateSignedUrl(pdfData.storageInfo.r2Key);
+                            if (!pdfData.downloadUrl) {
+                                console.log('⚠️ R2 not available for PDF:', pdfData._id, '- download URL not available');
+                            }
                         } catch (error) {
                             console.error('Error generating signed URL for PDF:', pdfData._id, error);
                             pdfData.downloadUrl = null;

@@ -241,9 +241,9 @@ const isAvatarAPerson = async(url) => {
     try {
         console.log('OpenAI function disabled - returning true');
         return true; // Default to true to avoid blocking functionality
-    } catch (error) {
-        return null;
-    }
+  } catch (error) {
+    return null;
+  }
 }
 
 // DISABLED - DeepSeek AI function removed for deployment
@@ -828,7 +828,7 @@ const scrapeLink = async (url) => {
         while ((match = linkRegex.exec(html)) !== null) {
             links.push(match[1]);
         }
-        
+
         return links;
     } catch (error) {
         console.error('Error scraping links:', error);

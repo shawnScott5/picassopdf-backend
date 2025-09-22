@@ -1,8 +1,9 @@
-const { chromium } = require('playwright');
+const chromium = require('@sparticuz/chromium');
+const puppeteer = require('puppeteer-core');
 
 /**
  * AWS Lambda handler for PDF conversion
- * Uses Playwright with new browser instance per request
+ * Uses @sparticuz/chromium with Puppeteer for optimal Lambda compatibility
  */
 exports.handler = async (event) => {
     console.log('📝 Lambda PDF Converter - Processing request');
@@ -12,7 +13,15 @@ exports.handler = async (event) => {
     try {
         // Parse the event body
         const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
-        const { html, url, options = {} } = body;
+        const { 
+            html = '', 
+            url = '', 
+            css = '', 
+            javascript = '',
+            options = {},
+            ai_options = {},
+            fileName = ''
+        } = body;
         
         if (!html && !url) {
             return {
@@ -33,23 +42,18 @@ exports.handler = async (event) => {
         const isUrl = !!url;
         const content = url || html;
         
-        console.log(`🎭 Launching Playwright browser for ${isUrl ? 'URL' : 'HTML'} conversion`);
+        console.log(`🎭 Launching Chrome browser for ${isUrl ? 'URL' : 'HTML'} conversion`);
         
-        // Create fresh browser instance for each request (optimized for Lambda)
-        browser = await chromium.launch({
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--no-first-run',
-                '--single-process',
-                '--disable-web-security',
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-renderer-backgrounding'
-            ]
+        // Create fresh browser instance for each request using @sparticuz/chromium
+        const executablePath = await chromium.executablePath();
+        console.log('🔧 Chrome executable path:', executablePath);
+        
+        browser = await puppeteer.launch({
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: executablePath,
+            headless: chromium.headless,
+            ignoreHTTPSErrors: true
         });
         
         const page = await browser.newPage();
@@ -62,7 +66,17 @@ exports.handler = async (event) => {
             });
         } else {
             console.log('📄 Setting HTML content');
-            await page.setContent(html, { 
+            
+            // Combine HTML with CSS and JavaScript if provided
+            let fullHtml = html;
+            if (css) {
+                fullHtml = `<style>${css}</style>${fullHtml}`;
+            }
+            if (javascript) {
+                fullHtml = `${fullHtml}<script>${javascript}</script>`;
+            }
+            
+            await page.setContent(fullHtml, { 
                 waitUntil: 'networkidle0',
                 timeout: 30000 
             });
@@ -85,7 +99,8 @@ exports.handler = async (event) => {
             pageRanges: options.pageRanges || '',
             headerTemplate: options.headerTemplate || '<div></div>',
             footerTemplate: options.footerTemplate || '<div></div>',
-            scale: options.scale || 1.0
+            scale: options.scale || 1.0,
+            ...options // Include any additional PDF options
         });
         
         console.log(`✅ PDF generated successfully: ${pdfBuffer.length} bytes`);
@@ -94,7 +109,7 @@ exports.handler = async (event) => {
             statusCode: 200,
             headers: {
                 'Content-Type': 'application/pdf',
-                'Content-Disposition': `attachment; filename="${options.filename || 'document.pdf'}"`,
+                'Content-Disposition': `attachment; filename="${fileName || 'document.pdf'}"`,
                 'Content-Length': pdfBuffer.length.toString(),
                 'Access-Control-Allow-Origin': '*'
             },

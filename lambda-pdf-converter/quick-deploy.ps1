@@ -2,7 +2,7 @@
 # PicassoPDF Lambda Quick Deploy
 
 param(
-    [string]$Region = "us-east-1",
+    [string]$Region = "us-east-2",
     [string]$FunctionName = "picassopdf-converter",
     [string]$EcrRepo = "picassopdf-lambda"
 )

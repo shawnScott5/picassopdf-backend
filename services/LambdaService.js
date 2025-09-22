@@ -25,24 +25,11 @@ class LambdaService {
                 body: JSON.stringify({
                     html: options.isUrl ? undefined : htmlOrUrl,
                     url: options.isUrl ? htmlOrUrl : undefined,
-                    options: {
-                        format: options.format || 'A4',
-                        margin: options.margin || {
-                            top: '20px',
-                            right: '20px',
-                            bottom: '20px',
-                            left: '20px'
-                        },
-                        landscape: options.landscape || false,
-                        filename: options.filename || 'document.pdf',
-                        displayHeaderFooter: options.displayHeaderFooter || false,
-                        headerTemplate: options.headerTemplate || '<div></div>',
-                        footerTemplate: options.footerTemplate || '<div></div>',
-                        scale: options.scale || 1.0,
-                        pageRanges: options.pageRanges || '',
-                        width: options.width,
-                        height: options.height
-                    }
+                    css: options.css || '',
+                    javascript: options.javascript || '',
+                    options: options,
+                    ai_options: options.ai_options || {},
+                    fileName: options.fileName || options.filename || ''
                 })
             };
 
