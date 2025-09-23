@@ -3,6 +3,7 @@ import LogsSchema from './LogsSchema.js';
 import UserSchema from '../users/UserSchema.js';
 import PDFPostProcessingService from '../services/PDFPostProcessingService.js';
 import LambdaService from '../services/LambdaService.js';
+import HTMLOptimizationService from '../services/HTMLOptimizationService.js';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
@@ -27,6 +28,7 @@ const __dirname = path.dirname(__filename);
 class ConversionsController {
     constructor() {
         this.browser = null; // Not used - new browser instance per request
+        this.htmlOptimizer = new HTMLOptimizationService();
         // Use /tmp for Heroku compatibility, fallback to local pdfs directory for development
         this.pdfStoragePath = process.env.NODE_ENV === 'production' 
             ? '/tmp' 
@@ -589,6 +591,19 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 htmlToConvert = await this.checkHTMLWithGemini(htmlToConvert);
                 console.log('HTML after AI repair:', htmlToConvert);
                 console.log('=== END AI REPAIR DEBUG ===');
+            }
+
+            // Optimize HTML content for better performance
+            if (htmlToConvert) {
+                const optimizationOptions = {
+                    enabled: options.optimizeHTML !== false, // Default to true
+                    removeJavaScript: options.removeJavaScript !== false,
+                    optimizeDOM: options.optimizeDOM !== false,
+                    preserveImages: options.preserveImages !== false,
+                    preserveCSS: options.preserveCSS !== false
+                };
+                
+                htmlToConvert = this.htmlOptimizer.optimizeHTML(htmlToConvert, optimizationOptions);
             }
 
             // Ensure htmlToConvert is not undefined or null after all processing
@@ -1719,6 +1734,19 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 if (javascript) {
                     htmlContent = `${htmlContent}<script>${javascript}</script>`;
                 }
+            }
+
+            // Optimize HTML content for better performance
+            if (!hasUrl && htmlContent) {
+                const optimizationOptions = {
+                    enabled: options.optimizeHTML !== false, // Default to true
+                    removeJavaScript: options.removeJavaScript !== false,
+                    optimizeDOM: options.optimizeDOM !== false,
+                    preserveImages: options.preserveImages !== false,
+                    preserveCSS: options.preserveCSS !== false
+                };
+                
+                htmlContent = this.htmlOptimizer.optimizeHTML(htmlContent, optimizationOptions);
             }
 
             // Check for layout repair using Gemini if ai_options.layout_repair is true
