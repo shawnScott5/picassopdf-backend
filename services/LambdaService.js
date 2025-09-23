@@ -1,5 +1,4 @@
 import AWS from 'aws-sdk';
-import HTMLOptimizationService from './HTMLOptimizationService.js';
 
 /**
  * Service for communicating with AWS Lambda PDF converter
@@ -22,7 +21,6 @@ class LambdaService {
         
         this.lambda = new AWS.Lambda();
         this.functionName = process.env.LAMBDA_PDF_FUNCTION_NAME || 'picassopdf-converter';
-        this.htmlOptimizer = new HTMLOptimizationService();
         
         console.log('✅ LambdaService initialized with function:', this.functionName);
     }
@@ -34,23 +32,9 @@ class LambdaService {
         try {
             console.log('🚀 Calling Lambda PDF converter...');
             
-            // Optimize HTML content if it's not a URL and optimization is enabled
-            let processedHTML = htmlOrUrl;
-            if (!options.isUrl && htmlOrUrl) {
-                const optimizationOptions = {
-                    enabled: options.optimizeHTML !== false, // Default to true
-                    removeJavaScript: options.removeJavaScript !== false,
-                    optimizeDOM: options.optimizeDOM !== false,
-                    preserveImages: options.preserveImages !== false,
-                    preserveCSS: options.preserveCSS !== false
-                };
-                
-                processedHTML = this.htmlOptimizer.optimizeHTML(htmlOrUrl, optimizationOptions);
-            }
-            
             const payload = {
                 body: JSON.stringify({
-                    html: options.isUrl ? undefined : processedHTML,
+                    html: options.isUrl ? undefined : htmlOrUrl,
                     url: options.isUrl ? htmlOrUrl : undefined,
                     css: options.css || '',
                     javascript: options.javascript || '',

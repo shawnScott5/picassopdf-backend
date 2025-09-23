@@ -3,7 +3,6 @@ import Redis from 'ioredis';
 import ConversionsController from '../conversions/ConversionsController.js';
 import ConversionsSchema from '../conversions/ConversionsSchema.js';
 import LogsSchema from '../conversions/LogsSchema.js';
-import HTMLOptimizationService from './HTMLOptimizationService.js';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -17,9 +16,6 @@ const __dirname = path.dirname(__filename);
 
 class PDFWorkerService {
     constructor() {
-        // Initialize HTML optimization service
-        this.htmlOptimizer = new HTMLOptimizationService();
-        
         // Redis connection (same config as QueueService)
         this.redisConfig = {
             host: process.env.REDIS_HOST || 'localhost',
@@ -230,17 +226,6 @@ class PDFWorkerService {
                     htmlContent = `${htmlContent}<script>${javascript}</script>`;
                 }
             }
-
-            // Optimize HTML content for better performance
-            const optimizationOptions = {
-                enabled: options.optimizeHTML !== false, // Default to true
-                removeJavaScript: options.removeJavaScript !== false,
-                optimizeDOM: options.optimizeDOM !== false,
-                preserveImages: options.preserveImages !== false,
-                preserveCSS: options.preserveCSS !== false
-            };
-            
-            htmlContent = this.htmlOptimizer.optimizeHTML(htmlContent, optimizationOptions);
 
             await job.updateProgress(40);
 
