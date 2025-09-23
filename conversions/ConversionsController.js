@@ -16,7 +16,6 @@ import * as cheerio from 'cheerio';
 import crypto from 'crypto';
 import os from 'os';
 import QueueService from '../services/QueueService.js';
-import HTMLOptimizationService from '../services/HTMLOptimizationService.js';
 
 dotenv.config();
 
@@ -36,7 +35,6 @@ class ConversionsController {
         console.log('📁 PDF Storage Path:', this.pdfStoragePath);
         this.pdfPostProcessingService = new PDFPostProcessingService();
         this.lambdaService = new LambdaService();
-        this.htmlOptimizationService = new HTMLOptimizationService();
         this.pdfCache = new Map(); // Simple in-memory cache
         this.maxCacheSize = 100; // Maximum number of cached PDFs
         this.cacheExpiry = 10 * 60 * 1000; // 10 minutes
@@ -1192,25 +1190,6 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 };
                 console.log('Using provided HTML content');
             }
-
-            // Optimize HTML for faster PDF generation (unless explicitly disabled)
-            const optimizeHTML = options.optimizeHTML !== false; // Default to true
-            if (optimizeHTML && finalHtml) {
-                const optimizationOptions = {
-                    removeExternalImages: options.removeExternalImages !== false,
-                    simplifyCSS: options.simplifyCSS !== false,
-                    removeJavaScript: options.removeJavaScript !== false,
-                    optimizeDOM: options.optimizeDOM !== false
-                };
-                
-                const originalLength = finalHtml.length;
-                finalHtml = this.htmlOptimizationService.optimizeHTML(finalHtml, optimizationOptions);
-                const optimizedLength = finalHtml.length;
-                
-                if (originalLength !== optimizedLength) {
-                    console.log(`🔧 HTML optimized: ${originalLength} → ${optimizedLength} bytes`);
-                }
-            }
             
             // Calculate input size
             const inputSizeBytes = (finalHtml ? Buffer.byteLength(finalHtml, 'utf8') : 0) + 
@@ -1739,25 +1718,6 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 // Inject custom JavaScript if provided
                 if (javascript) {
                     htmlContent = `${htmlContent}<script>${javascript}</script>`;
-                }
-
-                // Optimize HTML for faster PDF generation (unless explicitly disabled)
-                const optimizeHTML = options.optimize_html !== false; // Default to true
-                if (optimizeHTML) {
-                    const optimizationOptions = {
-                        removeExternalImages: options.remove_external_images !== false,
-                        simplifyCSS: options.simplify_css !== false,
-                        removeJavaScript: options.remove_javascript !== false,
-                        optimizeDOM: options.optimize_dom !== false
-                    };
-                    
-                    const originalLength = htmlContent.length;
-                    htmlContent = this.htmlOptimizationService.optimizeHTML(htmlContent, optimizationOptions);
-                    const optimizedLength = htmlContent.length;
-                    
-                    if (originalLength !== optimizedLength) {
-                        console.log(`🔧 HTML optimized: ${originalLength} → ${optimizedLength} bytes`);
-                    }
                 }
             }
 
