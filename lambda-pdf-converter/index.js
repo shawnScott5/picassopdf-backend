@@ -1,5 +1,6 @@
 const chromium = require('@sparticuz/chromium');
 const puppeteer = require('puppeteer-core');
+const { optimizeImages } = require('./optimizeImages.js');
 
 /**
  * AWS Lambda handler for PDF conversion
@@ -75,6 +76,10 @@ exports.handler = async (event) => {
             if (javascript) {
                 fullHtml = `${fullHtml}<script>${javascript}</script>`;
             }
+            
+            // Optimize images for faster processing
+            console.log('🖼️ Optimizing images...');
+            fullHtml = await optimizeImages(fullHtml);
             
             await page.setContent(fullHtml, { 
                 waitUntil: 'networkidle0',
