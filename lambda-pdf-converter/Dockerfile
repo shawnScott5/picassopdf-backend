@@ -37,6 +37,7 @@ RUN npm install --omit=dev
 
 # Copy Lambda code
 COPY index.js ./
+COPY optimizeImages.js ./
 
 # Lambda handler
 CMD ["index.handler"]
