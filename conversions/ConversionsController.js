@@ -62,7 +62,7 @@ class ConversionsController {
                 console.log('Using /tmp directory for PDF storage (Heroku compatible)');
                 return;
             }
-            
+
             if (!existsSync(this.pdfStoragePath)) {
                 fs.mkdirSync(this.pdfStoragePath, { recursive: true });
                 console.log('PDF storage directory created (sync):', this.pdfStoragePath);
@@ -90,7 +90,7 @@ class ConversionsController {
                 process.env.R2_SECRET_ACCESS_KEY && 
                 process.env.R2_BUCKET_NAME) {
                 
-                this.r2Enabled = true;
+            this.r2Enabled = true;
                 this.r2AccountId = process.env.R2_ACCOUNT_ID;
                 this.r2BucketName = process.env.R2_BUCKET_NAME;
                 
@@ -1462,29 +1462,29 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             // Create conversion record only if saveToVault is true
             const saveToVault = options.save_to_vault || false;
             if (saveToVault) {
-                conversionRecord = new ConversionsSchema({
-                    companyId: companyId,
-                    userId: userId,
-                    fileName: fileName,
-                    filePath: filePath,
-                    fileSize: 0,
-                    dataType: hasUrl ? 'url' : 'html',
-                    sourceType: hasUrl ? 'upload' : 'raw',
-                    status: 'queued',
-                    createdAt: new Date(),
-                    metadata: {
-                        apiKeyId: req.apiKey._id,
-                        source: 'public_api_v1_async',
-                        hasCSS: !!css,
-                        hasJavaScript: !!javascript,
-                        originalUrl: url || null,
+            conversionRecord = new ConversionsSchema({
+                companyId: companyId,
+                userId: userId,
+                fileName: fileName,
+                filePath: filePath,
+                fileSize: 0,
+                dataType: hasUrl ? 'url' : 'html',
+                sourceType: hasUrl ? 'upload' : 'raw',
+                status: 'queued',
+                createdAt: new Date(),
+                metadata: {
+                    apiKeyId: req.apiKey._id,
+                    source: 'public_api_v1_async',
+                    hasCSS: !!css,
+                    hasJavaScript: !!javascript,
+                    originalUrl: url || null,
                         saveToVault: saveToVault,
-                        layoutRepair: ai_options.layout_repair || false,
-                        options: options,
-                        aiOptions: ai_options
-                    }
-                });
-                await conversionRecord.save();
+                    layoutRepair: ai_options.layout_repair || false,
+                    options: options,
+                    aiOptions: ai_options
+                }
+            });
+            await conversionRecord.save();
             }
 
             // Create log record
@@ -1643,29 +1643,29 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
 
             // Create conversion record only if saveToVault is true
             if (saveToVault) {
-                conversionRecord = new ConversionsSchema({
-                    companyId: companyId,
-                    userId: userId,
-                    fileName: fileName,
-                    filePath: filePath,
-                    fileSize: 0, // Will be updated after conversion
-                    dataType: hasUrl ? 'url' : 'html',
-                    sourceType: hasUrl ? 'upload' : 'raw',
-                    status: 'processing',
-                    createdAt: new Date(),
-                    metadata: {
-                        apiKeyId: req.apiKey._id,
-                        source: 'public_api_v1',
-                        hasCSS: !!css,
-                        hasJavaScript: !!javascript,
-                        originalUrl: url || null,
-                        saveToVault: saveToVault,
-                        layoutRepair: layoutRepair,
-                        options: options,
-                        aiOptions: ai_options
-                    }
-                });
-                await conversionRecord.save();
+            conversionRecord = new ConversionsSchema({
+                companyId: companyId,
+                userId: userId,
+                fileName: fileName,
+                filePath: filePath,
+                fileSize: 0, // Will be updated after conversion
+                dataType: hasUrl ? 'url' : 'html',
+                sourceType: hasUrl ? 'upload' : 'raw',
+                status: 'processing',
+                createdAt: new Date(),
+                metadata: {
+                    apiKeyId: req.apiKey._id,
+                    source: 'public_api_v1',
+                    hasCSS: !!css,
+                    hasJavaScript: !!javascript,
+                    originalUrl: url || null,
+                    saveToVault: saveToVault,
+                    layoutRepair: layoutRepair,
+                    options: options,
+                    aiOptions: ai_options
+                }
+            });
+            await conversionRecord.save();
             }
 
             // Generate unique request ID
@@ -1767,7 +1767,7 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             await this.ensurePDFDirectory();
             const dirEndTime = Date.now();
             console.log(`📁 Directory check took: ${dirEndTime - dirStartTime}ms`);
-            
+
             // Save PDF to file system
             const fileStartTime = Date.now();
             await fsPromises.writeFile(filePath, pdfBuffer);
@@ -1821,12 +1821,12 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
 
             if (conversionRecord) {
                 const dbUpdateStartTime = Date.now();
-                conversionRecord.status = 'completed';
-                conversionRecord.fileSize = fileSize;
-                conversionRecord.completedAt = new Date();
-                conversionRecord.processingTime = processingTime;
-                conversionRecord.storageInfo = storageInfo;
-                await conversionRecord.save();
+            conversionRecord.status = 'completed';
+            conversionRecord.fileSize = fileSize;
+            conversionRecord.completedAt = new Date();
+            conversionRecord.processingTime = processingTime;
+            conversionRecord.storageInfo = storageInfo;
+            await conversionRecord.save();
                 const dbUpdateEndTime = Date.now();
                 console.log(`💾 Database update took: ${dbUpdateEndTime - dbUpdateStartTime}ms`);
             }

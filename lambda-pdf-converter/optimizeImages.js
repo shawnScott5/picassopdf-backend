@@ -1,8 +1,8 @@
-import fs from "fs";
-import path from "path";
-import axios from "axios";
-import mime from "mime-types";
-import { JSDOM } from "jsdom";
+const fs = require("fs");
+const path = require("path");
+const axios = require("axios");
+const mime = require("mime-types");
+const { JSDOM } = require("jsdom");
 
 const TMP_DIR = "/tmp"; // Lambda temp dir
 const BASE64_LIMIT = 50 * 1024; // 50KB
@@ -12,7 +12,7 @@ const BASE64_LIMIT = 50 * 1024; // 50KB
  * Small images → Base64 inline
  * Large images → Downloaded to /tmp and referenced locally
  */
-export async function optimizeImages(html) {
+async function optimizeImages(html) {
   const dom = new JSDOM(html);
   const document = dom.window.document;
 
@@ -42,7 +42,7 @@ export async function optimizeImages(html) {
         const fileName = `img_${i}${path.extname(src).split("?")[0] || ".png"}`;
         const filePath = path.join(TMP_DIR, fileName);
         fs.writeFileSync(filePath, buffer);
-        img.setAttribute("src", `file://${filePath}`);
+        img.setAttribute("src", `file:///${filePath}`);
       }
     } catch (err) {
       console.error(`❌ Failed to process image: ${src}`, err.message);
@@ -52,3 +52,5 @@ export async function optimizeImages(html) {
 
   return dom.serialize();
 }
+
+module.exports = { optimizeImages };

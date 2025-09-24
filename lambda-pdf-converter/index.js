@@ -1,29 +1,27 @@
-const chromium = require('@sparticuz/chromium');
+const chromium = require('chrome-aws-lambda');
 const puppeteer = require('puppeteer-core');
-const { optimizeImages } = require('./optimizeImages.js');
+const { ImageHandler } = require('./imageHandler.js');
 
 /**
  * AWS Lambda handler for PDF conversion
- * Uses @sparticuz/chromium with Puppeteer for optimal Lambda compatibility
+ * Optimized for speed with minimal logging and comprehensive image handling
  */
 exports.handler = async (event) => {
-    console.log('📝 Lambda PDF Converter - Processing request');
-    
     let browser = null;
-    
+
     try {
         // Parse the event body
         const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
-        const { 
-            html = '', 
-            url = '', 
-            css = '', 
+        const {
+            html = '',
+            url = '',
+            css = '',
             javascript = '',
             options = {},
             ai_options = {},
             fileName = ''
         } = body;
-        
+
         if (!html && !url) {
             return {
                 statusCode: 400,
@@ -39,35 +37,37 @@ exports.handler = async (event) => {
                 })
             };
         }
-        
+
         const isUrl = !!url;
         const content = url || html;
-        
-        console.log(`🎭 Launching Chrome browser for ${isUrl ? 'URL' : 'HTML'} conversion`);
-        
-        // Create fresh browser instance for each request using @sparticuz/chromium
-        const executablePath = await chromium.executablePath();
-        console.log('🔧 Chrome executable path:', executablePath);
-        
+
+        // Launch Chrome browser with optimized settings and better error handling
         browser = await puppeteer.launch({
-            args: chromium.args,
+            args: [
+                ...chromium.args,
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu'
+            ],
             defaultViewport: chromium.defaultViewport,
-            executablePath: executablePath,
+            executablePath: await chromium.executablePath,
             headless: chromium.headless,
-            ignoreHTTPSErrors: true
+            ignoreHTTPSErrors: true,
+            timeout: 30000
         });
-        
+
         const page = await browser.newPage();
-        
+
         if (isUrl) {
-            console.log('🌐 Navigating to URL:', url);
-            await page.goto(url, { 
+            await page.goto(url, {
                 waitUntil: 'networkidle0',
-                timeout: 30000 
+                timeout: 30000
             });
         } else {
-            console.log('📄 Setting HTML content');
-            
             // Combine HTML with CSS and JavaScript if provided
             let fullHtml = html;
             if (css) {
@@ -76,18 +76,21 @@ exports.handler = async (event) => {
             if (javascript) {
                 fullHtml = `${fullHtml}<script>${javascript}</script>`;
             }
-            
-            // Optimize images for faster processing
-            console.log('🖼️ Optimizing images...');
-            fullHtml = await optimizeImages(fullHtml);
-            
-            await page.setContent(fullHtml, { 
+
+            // Process images for PDF compatibility - hide broken images only
+            const imageHandler = new ImageHandler();
+            if (url) {
+                imageHandler.setBaseUrl(url);
+            }
+            fullHtml = await imageHandler.processImages(fullHtml);
+
+            await page.setContent(fullHtml, {
                 waitUntil: 'networkidle0',
-                timeout: 30000 
+                timeout: 30000
             });
         }
-        
-        console.log('📄 Generating PDF...');
+
+        // Generate PDF with user-provided options
         const pdfBuffer = await page.pdf({
             format: options.format || 'A4',
             printBackground: true,
@@ -107,9 +110,7 @@ exports.handler = async (event) => {
             scale: options.scale || 1.0,
             ...options // Include any additional PDF options
         });
-        
-        console.log(`✅ PDF generated successfully: ${pdfBuffer.length} bytes`);
-        
+
         return {
             statusCode: 200,
             headers: {
@@ -121,10 +122,8 @@ exports.handler = async (event) => {
             body: pdfBuffer.toString('base64'),
             isBase64Encoded: true
         };
-        
+
     } catch (error) {
-        console.error('❌ PDF conversion failed:', error);
-        
         return {
             statusCode: 500,
             headers: {
@@ -137,15 +136,21 @@ exports.handler = async (event) => {
                 error: error.message
             })
         };
-        
+
     } finally {
-        // Always clean up browser
+        // Clean up browser with better error handling
         if (browser) {
             try {
+                // Wait a bit before closing to ensure all operations complete
+                await new Promise(resolve => setTimeout(resolve, 100));
                 await browser.close();
-                console.log('🧹 Browser cleaned up successfully');
             } catch (cleanupError) {
-                console.error('⚠️ Browser cleanup failed:', cleanupError);
+                // Force kill browser if normal close fails
+                try {
+                    await browser.kill();
+                } catch (killError) {
+                    // Silent cleanup
+                }
             }
         }
     }

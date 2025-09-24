@@ -1,3 +1,0 @@
-﻿{
-    "body":  "{\"html\": \"\u003ch1\u003eHello from Lambda!\u003c/h1\u003e\u003cp\u003eTest PDF generation.\u003c/p\u003e\", \"options\": {\"format\": \"A4\"}}"
-}

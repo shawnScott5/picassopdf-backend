@@ -8,8 +8,8 @@
         "deploy": "npm run build && zip -r function.zip ."
     },
     "dependencies": {
-        "@sparticuz/chromium": "^119.0.0",
-        "puppeteer-core": "^21.0.0",
+        "chrome-aws-lambda": "^10.1.0",
+        "puppeteer-core": "^10.1.0",
         "axios": "^1.6.0",
         "mime-types": "^2.1.35",
         "jsdom": "^23.0.0"
