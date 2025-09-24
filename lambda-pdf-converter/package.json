@@ -12,7 +12,8 @@
         "puppeteer-core": "^10.1.0",
         "axios": "^1.6.0",
         "mime-types": "^2.1.35",
-        "jsdom": "^23.0.0"
+        "jsdom": "^23.0.0",
+        "pagedjs": "^0.4.0"
     },
     "engines": {
         "node": "20.x"

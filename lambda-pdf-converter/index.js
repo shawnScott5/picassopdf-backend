@@ -5,6 +5,349 @@ const fs = require('fs');
 const path = require('path');
 
 /**
+ * Apply professional page breaks using pagedjs and CSS
+ */
+async function applyPageBreaks(page) {
+    try {
+        console.log('Applying professional page breaks...');
+        
+        // Inject pagedjs CSS and JavaScript
+        await page.addStyleTag({
+            url: 'https://unpkg.com/pagedjs@0.4.0/dist/paged.polyfill.css'
+        });
+        
+        await page.addScriptTag({
+            url: 'https://unpkg.com/pagedjs@0.4.0/dist/paged.polyfill.js'
+        });
+        
+        // Wait for pagedjs to load
+        await page.waitForFunction(() => window.Paged, { timeout: 10000 });
+        
+        // Apply page break processing
+        const result = await page.evaluate(() => {
+            try {
+                // Initialize pagedjs
+                const paged = new window.Paged.Previewer();
+                
+                // Process the document with page breaks
+                return paged.preview(document.body).then((flow) => {
+                    console.log('Pagedjs processed', flow.total, 'pages');
+                    return {
+                        totalPages: flow.total,
+                        success: true
+                    };
+                }).catch((error) => {
+                    console.error('Pagedjs error:', error);
+                    return {
+                        totalPages: 1,
+                        success: false,
+                        error: error.message
+                    };
+                });
+            } catch (error) {
+                console.error('Pagedjs initialization error:', error);
+                return {
+                    totalPages: 1,
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+        
+        if (result.success) {
+            console.log('Page breaks applied successfully with pagedjs');
+        } else {
+            console.warn('Pagedjs failed, applying CSS fallback:', result.error);
+            await applyCSSPageBreaks(page);
+        }
+        
+    } catch (error) {
+        console.warn('Pagedjs page break processing failed, using CSS fallback:', error.message);
+        await applyCSSPageBreaks(page);
+    }
+}
+
+/**
+ * Fallback CSS-based page break handling
+ */
+async function applyCSSPageBreaks(page) {
+    try {
+        console.log('Applying CSS-based page breaks...');
+        
+        // Professional page break CSS
+        const pageBreakCSS = `
+            /* === PROFESSIONAL PAGE BREAK RULES === */
+            
+            /* Print-specific optimizations */
+            @media print {
+                * {
+                    -webkit-print-color-adjust: exact !important;
+                    color-adjust: exact !important;
+                }
+                
+                /* Page setup */
+                @page {
+                    size: A4;
+                    margin: 10mm 0mm;
+                }
+            }
+            
+            /* Prevent ugly page breaks for headings */
+            h1, h2, h3, h4, h5, h6 {
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
+                break-after: avoid !important;
+                break-inside: avoid !important;
+                orphans: 3 !important;
+                widows: 3 !important;
+            }
+            
+            /* Smart paragraph breaks */
+            p {
+                orphans: 2 !important;
+                widows: 2 !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            
+            /* Keep list items together */
+            li {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                orphans: 2 !important;
+                widows: 2 !important;
+            }
+            
+            /* Prevent lists from breaking badly */
+            ul, ol {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            
+            /* Table handling - professional approach */
+            table {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                border-collapse: collapse !important;
+            }
+            
+            /* Keep table rows together */
+            tr {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            
+            /* Repeat table headers on each page */
+            thead {
+                display: table-header-group !important;
+            }
+            
+            /* Keep table footers at bottom */
+            tfoot {
+                display: table-footer-group !important;
+            }
+            
+            /* Image and media handling */
+            img, figure, svg {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                max-width: 100% !important;
+                height: auto !important;
+            }
+            
+            /* Keep captions with images */
+            figure, .figure {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            
+            figcaption, .caption {
+                page-break-before: avoid !important;
+                break-before: avoid !important;
+            }
+            
+            /* Block elements that should stay together */
+            blockquote, pre, code {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                orphans: 3 !important;
+                widows: 3 !important;
+            }
+            
+            /* Div containers - smart breaking */
+            .section, .card, .panel, .box, .container {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            
+            /* Form elements */
+            form, fieldset {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            
+            /* Navigation and UI elements */
+            nav, .nav, .navigation {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            
+            /* Flex and grid layouts */
+            .flex-container, .grid-container {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            
+            /* Force page breaks where needed */
+            .page-break-before {
+                page-break-before: always !important;
+                break-before: page !important;
+            }
+            
+            .page-break-after {
+                page-break-after: always !important;
+                break-after: page !important;
+            }
+            
+            .no-page-break {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            
+            /* Avoid breaking after short paragraphs */
+            p:has(+ h1), p:has(+ h2), p:has(+ h3), p:has(+ h4), p:has(+ h5), p:has(+ h6) {
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+            }
+            
+            /* Large content handling */
+            .large-content {
+                page-break-before: auto !important;
+                break-before: auto !important;
+            }
+        `;
+        
+        await page.addStyleTag({ content: pageBreakCSS });
+        
+        // Apply content analysis and optimization
+        await page.evaluate(() => {
+            // Smart content grouping function
+            function groupRelatedContent() {
+                const elements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, table, img, figure, blockquote, pre, ul, ol');
+                
+                elements.forEach((element, index) => {
+                    // Keep headings with next paragraph
+                    if (element.matches('h1, h2, h3, h4, h5, h6')) {
+                        const nextElement = element.nextElementSibling;
+                        if (nextElement && nextElement.matches('p, ul, ol, table, img, figure')) {
+                            // Create a wrapper to keep them together
+                            const wrapper = document.createElement('div');
+                            wrapper.className = 'heading-group no-page-break';
+                            wrapper.style.cssText = 'page-break-inside: avoid !important; break-inside: avoid !important;';
+                            
+                            element.parentNode.insertBefore(wrapper, element);
+                            wrapper.appendChild(element);
+                            wrapper.appendChild(nextElement);
+                        }
+                    }
+                    
+                    // Keep short paragraphs with next content
+                    if (element.matches('p') && element.textContent.length < 100) {
+                        const nextElement = element.nextElementSibling;
+                        if (nextElement && !nextElement.matches('h1, h2, h3, h4, h5, h6')) {
+                            element.style.cssText += 'page-break-after: avoid !important; break-after: avoid !important;';
+                        }
+                    }
+                    
+                    // Enhance table handling
+                    if (element.matches('table')) {
+                        // Ensure table has proper structure
+                        const thead = element.querySelector('thead');
+                        const tbody = element.querySelector('tbody');
+                        
+                        if (!thead && element.querySelector('tr')) {
+                            // Convert first row to header if no thead exists
+                            const firstRow = element.querySelector('tr');
+                            if (firstRow && firstRow.querySelectorAll('th').length > 0) {
+                                const newThead = document.createElement('thead');
+                                newThead.appendChild(firstRow);
+                                element.insertBefore(newThead, element.firstChild);
+                            }
+                        }
+                        
+                        // Add table wrapper for better control
+                        if (!element.closest('.table-wrapper')) {
+                            const wrapper = document.createElement('div');
+                            wrapper.className = 'table-wrapper no-page-break';
+                            wrapper.style.cssText = 'page-break-inside: avoid !important; break-inside: avoid !important; overflow-x: auto;';
+                            element.parentNode.insertBefore(wrapper, element);
+                            wrapper.appendChild(element);
+                        }
+                    }
+                    
+                    // Handle images and figures
+                    if (element.matches('img, figure')) {
+                        // Ensure images have proper sizing
+                        if (element.matches('img')) {
+                            element.style.cssText += 'max-width: 100% !important; height: auto !important; page-break-inside: avoid !important;';
+                        }
+                        
+                        // Keep images with captions
+                        const caption = element.querySelector('figcaption') || element.nextElementSibling;
+                        if (caption && caption.matches('figcaption, .caption')) {
+                            const wrapper = element.closest('figure') || element;
+                            wrapper.style.cssText += 'page-break-inside: avoid !important; break-inside: avoid !important;';
+                        }
+                    }
+                    
+                    // Handle lists intelligently
+                    if (element.matches('ul, ol')) {
+                        const items = element.querySelectorAll('li');
+                        if (items.length <= 5) {
+                            // Keep short lists together
+                            element.style.cssText += 'page-break-inside: avoid !important; break-inside: avoid !important;';
+                        } else {
+                            // For long lists, ensure each item doesn't break
+                            items.forEach(item => {
+                                item.style.cssText += 'page-break-inside: avoid !important; break-inside: avoid !important;';
+                            });
+                        }
+                    }
+                    
+                    // Handle code blocks and quotes
+                    if (element.matches('pre, blockquote')) {
+                        element.style.cssText += 'page-break-inside: avoid !important; break-inside: avoid !important; orphans: 3 !important; widows: 3 !important;';
+                    }
+                });
+            }
+            
+            // Execute content grouping
+            groupRelatedContent();
+            
+            // Add page break hints based on content length
+            const pageHeight = 297; // A4 height in mm
+            const contentHeight = document.body.scrollHeight;
+            const pages = Math.ceil(contentHeight / (pageHeight * 3.78)); // Approximate conversion
+            
+            if (pages > 1) {
+                // Add strategic page break opportunities
+                const sections = document.querySelectorAll('h1, h2, .section, .chapter');
+                sections.forEach((section, index) => {
+                    if (index > 0 && index % 2 === 0) {
+                        section.style.cssText += 'page-break-before: auto !important;';
+                    }
+                });
+            }
+        });
+        
+        console.log('CSS page breaks applied successfully');
+        
+    } catch (error) {
+        console.warn('CSS page break processing failed:', error.message);
+    }
+}
+
+/**
  * AWS Lambda handler for PDF conversion
  * Optimized for speed with minimal logging and comprehensive image handling
  */
@@ -332,6 +675,9 @@ exports.handler = async (event) => {
                 });
             });
         }
+
+        // Apply professional page breaks
+        await applyPageBreaks(page);
 
         // Generate PDF with user-provided options
         const pdfBuffer = await page.pdf({
