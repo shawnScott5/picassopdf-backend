@@ -16,7 +16,6 @@ import * as cheerio from 'cheerio';
 import crypto from 'crypto';
 import os from 'os';
 import QueueService from '../services/QueueService.js';
-import { Previewer } from 'pagedjs';
 
 dotenv.config();
 
@@ -597,77 +596,6 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
         return sanitized;
     }
 
-    /**
-     * Apply professional page breaks using pagedjs
-     * This method processes HTML with proper page break handling
-     */
-    async applyPageBreaks(html, page) {
-        try {
-            console.log('Applying professional page breaks with pagedjs...');
-            
-            // Inject pagedjs CSS and JavaScript
-            await page.addStyleTag({
-                url: 'https://unpkg.com/pagedjs@0.4.0/dist/paged.polyfill.css'
-            });
-            
-            await page.addScriptTag({
-                url: 'https://unpkg.com/pagedjs@0.4.0/dist/paged.polyfill.js'
-            });
-            
-            // Wait for pagedjs to load
-            await page.waitForFunction(() => window.Paged);
-            
-            // Apply page break processing
-            await page.evaluate(() => {
-                // Initialize pagedjs
-                const paged = new window.Paged.Previewer();
-                
-                // Process the document with page breaks
-                return paged.preview(document.body).then((flow) => {
-                    console.log('Pagedjs processed', flow.total, 'pages');
-                    return {
-                        totalPages: flow.total,
-                        success: true
-                    };
-                }).catch((error) => {
-                    console.error('Pagedjs error:', error);
-                    return {
-                        totalPages: 1,
-                        success: false,
-                        error: error.message
-                    };
-                });
-            });
-            
-            console.log('Page breaks applied successfully');
-            
-        } catch (error) {
-            console.warn('Pagedjs page break processing failed, using fallback CSS:', error.message);
-            // Fallback to CSS-based page breaks
-            await this.applyCSSPageBreaks(page);
-        }
-    }
-
-    /**
-     * Fallback CSS-based page break handling
-     */
-    async applyCSSPageBreaks(page) {
-        try {
-            console.log('Applying CSS-based page breaks...');
-            
-            // Inject professional page break CSS
-            const pageBreakCSS = this.getProfessionalPageBreakCSS();
-            await page.addStyleTag({ content: pageBreakCSS });
-            
-            // Apply content analysis and optimization
-            await this.analyzeAndOptimizeContent('', page);
-            
-            console.log('CSS page breaks applied successfully');
-            
-        } catch (error) {
-            console.warn('CSS page break processing failed:', error.message);
-        }
-    }
 
     async convertHTMLToPDF(data) {
         try {
