@@ -1,11 +1,87 @@
 const chromium = require('chrome-aws-lambda');
 const puppeteer = require('puppeteer-core');
 const { ImageHandler } = require('./imageHandler.js');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * AWS Lambda handler for PDF conversion
  * Optimized for speed with minimal logging and comprehensive image handling
  */
+/**
+ * Convert local file paths to base64 data URIs
+ * This allows local images to work in the Lambda environment
+ */
+function convertLocalFilesToBase64(html) {
+    // Find all img tags with file:// URLs
+    const fileUrlRegex = /<img([^>]*?)src\s*=\s*["']file:\/\/([^"']+)["']([^>]*?)>/gi;
+    
+    let processedHtml = html;
+    let match;
+    
+    while ((match = fileUrlRegex.exec(html)) !== null) {
+        const fullMatch = match[0];
+        const beforeSrc = match[1];
+        const filePath = match[2];
+        const afterSrc = match[3];
+        
+        try {
+            // Convert Windows path to proper format
+            const normalizedPath = filePath.replace(/\\/g, '/').replace(/^\/+/, '');
+            const fullPath = path.resolve(normalizedPath);
+            
+            // Check if file exists
+            if (fs.existsSync(fullPath)) {
+                // Read file and convert to base64
+                const fileBuffer = fs.readFileSync(fullPath);
+                const base64String = fileBuffer.toString('base64');
+                
+                // Determine MIME type based on file extension
+                const ext = path.extname(fullPath).toLowerCase();
+                let mimeType = 'image/png'; // default
+                
+                switch (ext) {
+                    case '.jpg':
+                    case '.jpeg':
+                        mimeType = 'image/jpeg';
+                        break;
+                    case '.png':
+                        mimeType = 'image/png';
+                        break;
+                    case '.gif':
+                        mimeType = 'image/gif';
+                        break;
+                    case '.webp':
+                        mimeType = 'image/webp';
+                        break;
+                    case '.svg':
+                        mimeType = 'image/svg+xml';
+                        break;
+                }
+                
+                // Create data URI
+                const dataUri = `data:${mimeType};base64,${base64String}`;
+                
+                // Replace the file:// URL with data URI
+                const newImgTag = `<img${beforeSrc}src="${dataUri}"${afterSrc}>`;
+                processedHtml = processedHtml.replace(fullMatch, newImgTag);
+                
+                console.log(`✅ Converted local file to base64: ${filePath}`);
+            } else {
+                console.log(`❌ Local file not found: ${filePath}`);
+                // Remove the img tag if file doesn't exist
+                processedHtml = processedHtml.replace(fullMatch, '');
+            }
+        } catch (error) {
+            console.log(`❌ Error converting local file ${filePath}:`, error.message);
+            // Remove the img tag if conversion fails
+            processedHtml = processedHtml.replace(fullMatch, '');
+        }
+    }
+    
+    return processedHtml;
+}
+
 /**
  * Remove problematic images from HTML before browser processing
  * This prevents the browser from even attempting to load them
@@ -175,7 +251,8 @@ exports.handler = async (event) => {
                 fullHtml = `${fullHtml}<script>${javascript}</script>`;
             }
 
-            // Pre-process HTML to remove problematic images before browser loads them
+            // Pre-process HTML to convert local files to base64 and remove problematic images
+            fullHtml = convertLocalFilesToBase64(fullHtml);
             fullHtml = removeProblematicImages(fullHtml);
             
             // Process images for PDF compatibility - hide broken images only
@@ -198,24 +275,45 @@ exports.handler = async (event) => {
                     const problematicServices = ['via.placeholder.com', 'placeholder.com', 'dummyimage.com'];
                     const hasInvalidService = problematicServices.some(service => src.includes(service));
                     
-                    // Also check for invalid relative paths and broken images
-                    const isInvalidRelativePath = src.startsWith('file://') && (src.includes('/images/') || src.includes('sample.jpg'));
+                    // Check for invalid relative paths (more specific)
+                    const isInvalidRelativePath = src.startsWith('file://') && 
+                                                 (src.includes('/images/') || src.includes('sample.jpg') || src.includes('placeholder'));
+                    
                     // Only hide images that are clearly broken AND from problematic sources
                     const isBrokenImage = img.naturalWidth === 0 && img.naturalHeight === 0 && 
                                          (src.includes('via.placeholder.com') || src.includes('placeholder.com') || src.includes('dummyimage.com'));
                     
-                    if (hasInvalidService || isInvalidRelativePath || isBrokenImage) {
+                    // Check if image failed to load (error state)
+                    const isFailedImage = img.complete && img.naturalWidth === 0;
+                    
+                    // Only hide images that are definitely problematic
+                    if (hasInvalidService || isInvalidRelativePath || (isBrokenImage && isFailedImage)) {
                         console.log(`🚫 Hiding problematic/broken image in browser: ${src}`);
+                        console.log(`   - hasInvalidService: ${hasInvalidService}`);
+                        console.log(`   - isInvalidRelativePath: ${isInvalidRelativePath}`);
+                        console.log(`   - isBrokenImage: ${isBrokenImage}`);
+                        console.log(`   - isFailedImage: ${isFailedImage}`);
+                        
                         img.style.display = 'none !important';
                         img.style.visibility = 'hidden !important';
                         img.style.width = '0 !important';
                         img.style.height = '0 !important';
                         img.style.opacity = '0 !important';
-                        // Also hide the parent element if it's a section
-                        const parent = img.closest('section');
-                        if (parent && (hasInvalidService || isInvalidRelativePath)) {
-                            parent.style.display = 'none !important';
+                        
+                        // Only hide the immediate parent container, not entire sections
+                        const parent = img.parentElement;
+                        if (parent && parent.tagName !== 'SECTION' && (hasInvalidService || isInvalidRelativePath)) {
+                            // Only hide if it's a small container (like div, figure, etc.)
+                            if (['DIV', 'FIGURE', 'P', 'SPAN'].includes(parent.tagName)) {
+                                console.log(`🚫 Hiding parent container: ${parent.tagName}`);
+                                parent.style.display = 'none !important';
+                            }
                         }
+                    } else {
+                        // Log valid images to help debug
+                        console.log(`✅ Valid image found: ${src}`);
+                        console.log(`   - naturalWidth: ${img.naturalWidth}, naturalHeight: ${img.naturalHeight}`);
+                        console.log(`   - complete: ${img.complete}`);
                     }
                 });
                 
