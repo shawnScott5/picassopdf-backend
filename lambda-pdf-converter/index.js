@@ -6,6 +6,41 @@ const { ImageHandler } = require('./imageHandler.js');
  * AWS Lambda handler for PDF conversion
  * Optimized for speed with minimal logging and comprehensive image handling
  */
+/**
+ * Remove problematic images from HTML before browser processing
+ * This prevents the browser from even attempting to load them
+ */
+function removeProblematicImages(html) {
+    const problematicServices = ['via.placeholder.com', 'placeholder.com', 'dummyimage.com'];
+    
+    // Replace problematic img tags with hidden divs
+    let processedHtml = html;
+    
+    problematicServices.forEach(service => {
+        // Replace img tags with problematic src attributes - use more aggressive hiding
+        const imgRegex = new RegExp(`<img([^>]*?)src\\s*=\\s*["'][^"']*${service.replace('.', '\\.')}[^"']*["']([^>]*?)>`, 'gi');
+        processedHtml = processedHtml.replace(imgRegex, '<div style="display:none !important; visibility:hidden !important; width:0 !important; height:0 !important; overflow:hidden !important;" data-removed-image="true"></div>');
+        
+        // Also handle srcset attributes in source tags
+        const sourceRegex = new RegExp(`<source([^>]*?)srcset\\s*=\\s*["'][^"']*${service.replace('.', '\\.')}[^"']*["']([^>]*?)>`, 'gi');
+        processedHtml = processedHtml.replace(sourceRegex, '<div style="display:none !important;" data-removed-source="true"></div>');
+        
+        // Handle picture elements that contain problematic images
+        const pictureRegex = new RegExp(`<picture[^>]*>([\\s\\S]*?)<\\/picture>`, 'gi');
+        processedHtml = processedHtml.replace(pictureRegex, (match, content) => {
+            const hasProblematicService = problematicServices.some(service => 
+                content.includes(service)
+            );
+            if (hasProblematicService) {
+                return '<div style="display:none !important;" data-removed-picture="true"></div>';
+            }
+            return match;
+        });
+    });
+    
+    return processedHtml;
+}
+
 exports.handler = async (event) => {
     let browser = null;
 
@@ -62,6 +97,69 @@ exports.handler = async (event) => {
 
         const page = await browser.newPage();
 
+        // Set up aggressive image blocking and error handling
+        await page.setRequestInterception(true);
+        page.on('request', (request) => {
+            const resourceType = request.resourceType();
+            const url = request.url();
+            
+            // Block ALL images from known problematic services immediately
+            if (resourceType === 'image') {
+                const invalidServices = ['via.placeholder.com', 'placeholder.com', 'dummyimage.com'];
+                const hasInvalidService = invalidServices.some(service => url.includes(service));
+                
+                if (hasInvalidService) {
+                    console.log(`🚫 BLOCKING problematic image: ${url}`);
+                    request.abort('failed');
+                    return;
+                }
+            }
+            
+            // Also block any request that looks like a problematic image service
+            const invalidServices = ['via.placeholder.com', 'placeholder.com', 'dummyimage.com'];
+            const hasInvalidService = invalidServices.some(service => url.includes(service));
+            
+            if (hasInvalidService) {
+                console.log(`🚫 BLOCKING problematic request: ${url}`);
+                request.abort('failed');
+                return;
+            }
+            
+            request.continue();
+        });
+
+        // Set image loading timeout
+        await page.evaluateOnNewDocument(() => {
+            // Override image loading to fail fast
+            const originalImage = window.Image;
+            window.Image = function() {
+                const img = new originalImage();
+                const originalSrc = Object.getOwnPropertyDescriptor(originalImage.prototype, 'src');
+                
+                Object.defineProperty(img, 'src', {
+                    get: originalSrc.get,
+                    set: function(value) {
+                        // Check for problematic image URLs
+                        const invalidServices = ['via.placeholder.com', 'placeholder.com', 'dummyimage.com'];
+                        const hasInvalidService = invalidServices.some(service => value.includes(service));
+                        
+                        if (hasInvalidService) {
+                            console.log(`Blocking problematic image in browser: ${value}`);
+                            // Trigger error immediately
+                            setTimeout(() => {
+                                if (img.onerror) img.onerror();
+                            }, 100);
+                            return;
+                        }
+                        
+                        originalSrc.set.call(this, value);
+                    }
+                });
+                
+                return img;
+            };
+        });
+
         if (isUrl) {
             await page.goto(url, {
                 waitUntil: 'networkidle0',
@@ -77,6 +175,9 @@ exports.handler = async (event) => {
                 fullHtml = `${fullHtml}<script>${javascript}</script>`;
             }
 
+            // Pre-process HTML to remove problematic images before browser loads them
+            fullHtml = removeProblematicImages(fullHtml);
+            
             // Process images for PDF compatibility - hide broken images only
             const imageHandler = new ImageHandler();
             if (url) {
@@ -85,8 +186,52 @@ exports.handler = async (event) => {
             fullHtml = await imageHandler.processImages(fullHtml);
 
             await page.setContent(fullHtml, {
-                waitUntil: 'networkidle0',
-                timeout: 30000
+                waitUntil: 'domcontentloaded', // Changed from networkidle0 to domcontentloaded for faster loading
+                timeout: 15000 // Reduced timeout
+            });
+
+            // Quick check for any remaining problematic images and hide them
+            await page.evaluate(() => {
+                const images = document.querySelectorAll('img');
+                images.forEach(img => {
+                    const src = img.src;
+                    const problematicServices = ['via.placeholder.com', 'placeholder.com', 'dummyimage.com'];
+                    const hasInvalidService = problematicServices.some(service => src.includes(service));
+                    
+                    // Also check for invalid relative paths and broken images
+                    const isInvalidRelativePath = src.startsWith('file://') && (src.includes('/images/') || src.includes('sample.jpg'));
+                    // Only hide images that are clearly broken AND from problematic sources
+                    const isBrokenImage = img.naturalWidth === 0 && img.naturalHeight === 0 && 
+                                         (src.includes('via.placeholder.com') || src.includes('placeholder.com') || src.includes('dummyimage.com'));
+                    
+                    if (hasInvalidService || isInvalidRelativePath || isBrokenImage) {
+                        console.log(`🚫 Hiding problematic/broken image in browser: ${src}`);
+                        img.style.display = 'none !important';
+                        img.style.visibility = 'hidden !important';
+                        img.style.width = '0 !important';
+                        img.style.height = '0 !important';
+                        img.style.opacity = '0 !important';
+                        // Also hide the parent element if it's a section
+                        const parent = img.closest('section');
+                        if (parent && (hasInvalidService || isInvalidRelativePath)) {
+                            parent.style.display = 'none !important';
+                        }
+                    }
+                });
+                
+                // Also hide any picture elements that might still be visible
+                const pictures = document.querySelectorAll('picture');
+                pictures.forEach(picture => {
+                    const content = picture.innerHTML;
+                    const hasProblematicService = ['via.placeholder.com', 'placeholder.com', 'dummyimage.com'].some(service => 
+                        content.includes(service)
+                    );
+                    if (hasProblematicService) {
+                        console.log(`🚫 Hiding problematic picture element in browser`);
+                        picture.style.display = 'none !important';
+                        picture.style.visibility = 'hidden !important';
+                    }
+                });
             });
         }
 
