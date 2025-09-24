@@ -554,6 +554,48 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
         return issues.length > 0;
     }
 
+    /**
+     * Normalize HTML content for PDF generation
+     * Handles multiline HTML input gracefully like professional APIs
+     */
+    normalizeHTML(html) {
+        if (!html || typeof html !== 'string') {
+            return html;
+        }
+        
+        // Remove excessive whitespace and normalize line breaks
+        return html
+            .replace(/\r\n/g, '\n')           // Normalize Windows line endings
+            .replace(/\r/g, '\n')             // Normalize Mac line endings
+            .replace(/\n\s*\n/g, '\n')        // Remove empty lines
+            .replace(/\s+/g, ' ')             // Collapse multiple spaces
+            .replace(/>\s+</g, '><')          // Remove spaces between tags
+            .trim();                          // Remove leading/trailing whitespace
+    }
+
+    /**
+     * Sanitize and prepare HTML for PDF conversion
+     * Ensures HTML is clean and properly formatted
+     */
+    sanitizeHTML(html) {
+        if (!html || typeof html !== 'string') {
+            return html;
+        }
+        
+        // Basic HTML sanitization
+        let sanitized = html
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters
+            .replace(/&(?![a-zA-Z0-9#]+;)/g, '&amp;')          // Escape unescaped ampersands
+            .trim();
+        
+        // Ensure proper DOCTYPE if missing
+        if (!sanitized.toLowerCase().includes('<!doctype')) {
+            sanitized = '<!DOCTYPE html>\n' + sanitized;
+        }
+        
+        return sanitized;
+    }
+
     async convertHTMLToPDF(data) {
         try {
             console.log('Converting HTML to PDF');
@@ -565,6 +607,13 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             }
 
             let htmlToConvert = htmlContent;
+            
+            // Normalize and sanitize HTML content
+            if (htmlToConvert) {
+                htmlToConvert = this.normalizeHTML(htmlToConvert);
+                htmlToConvert = this.sanitizeHTML(htmlToConvert);
+                console.log('HTML normalized and sanitized for PDF conversion');
+            }
             
             // If URL is provided, fetch the HTML content
             if (htmlUrl && !htmlContent) {
@@ -1707,8 +1756,10 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 // For URLs, we'll let the generatePDF method handle navigation directly
                 htmlContent = url; // Pass the URL directly
                 } else {
-                // Use provided HTML content
-                htmlContent = html;
+                // Use provided HTML content - normalize multiline input
+                htmlContent = this.normalizeHTML(html);
+                htmlContent = this.sanitizeHTML(htmlContent);
+                console.log('HTML content normalized for public API');
                 
                 // Inject custom CSS if provided
                 if (css) {

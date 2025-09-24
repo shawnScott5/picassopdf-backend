@@ -1,7 +1,17 @@
 import express from 'express';
+import multer from 'multer';
 import conversionsController, { fetchAllConvertedPDFs } from './ConversionsController.js';
 import authenticate from '../middlewares/authenticate.js';
 import apiKeyAuth from '../middlewares/apiKeyAuth.js';
+
+// Configure multer for multipart/form-data
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB limit
+        fieldSize: 10 * 1024 * 1024  // 10MB limit for text fields
+    }
+});
 
 const ConversionsRoute = express.Router();
 
@@ -40,6 +50,49 @@ ConversionsRoute.delete('/:id', authenticate, async (req, res, next) => {
         await conversionsController.deletePDF(req, res, next);
     } catch (error) {
         next(error);
+    }
+});
+
+// Multipart/form-data endpoint for HTML file uploads
+// POST /convert/pdf/multipart - Convert HTML file to PDF with API key authentication
+ConversionsRoute.post('/convert/pdf/multipart', apiKeyAuth, upload.single('html_file'), async (req, res, next) => {
+    try {
+        // Handle multipart/form-data request
+        const { html, css, javascript, url, options, ai_options } = req.body;
+        const htmlFile = req.file;
+        
+        let htmlContent = html;
+        
+        // If HTML file is uploaded, read its content
+        if (htmlFile) {
+            htmlContent = htmlFile.buffer.toString('utf8');
+            console.log('HTML file uploaded:', htmlFile.originalname, 'Size:', htmlFile.size);
+        }
+        
+        // Parse JSON strings if they exist
+        const parsedOptions = options ? JSON.parse(options) : {};
+        const parsedAiOptions = ai_options ? JSON.parse(ai_options) : {};
+        
+        // Create a new request body for the existing API
+        req.body = {
+            html: htmlContent,
+            css: css || '',
+            javascript: javascript || '',
+            url: url || null,
+            options: parsedOptions,
+            ai_options: parsedAiOptions
+        };
+        
+        // Call the existing public API handler
+        await conversionsController.convertHTMLToPDFAPIPublic(req, res, next);
+        
+    } catch (error) {
+        console.error('Multipart conversion error:', error);
+        res.status(400).json({
+            success: false,
+            message: 'Invalid multipart/form-data request',
+            error: error.message
+        });
     }
 });
 
