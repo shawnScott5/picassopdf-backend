@@ -961,25 +961,10 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                     color-adjust: exact !important;
                 }
                 
-                /* Ensure background colors persist across page breaks */
-                body, html {
-                    background-color: inherit !important;
-                    -webkit-print-color-adjust: exact !important;
-                    color-adjust: exact !important;
-                }
-                
-                /* Fix for page break background color issues */
-                * {
-                    background-color: inherit !important;
-                    -webkit-print-color-adjust: exact !important;
-                    color-adjust: exact !important;
-                }
-                
                 /* Page setup */
                 @page {
                     size: A4;
                     margin: 10mm 0mm;
-                    background-color: inherit !important;
                 }
             }
             
@@ -1116,41 +1101,6 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             .large-content {
                 page-break-before: auto !important;
                 break-before: auto !important;
-            }
-            
-            /* Fix page break background color issues */
-            .pagedjs_page {
-                background-color: inherit !important;
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
-            
-            /* Ensure all page elements maintain background color */
-            .pagedjs_page_content {
-                background-color: inherit !important;
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
-            
-            /* Fix for elements that span across page breaks */
-            .pagedjs_page_content * {
-                background-color: inherit !important;
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
-            
-            /* Specific fix for table elements across page breaks */
-            table, tr, td, th {
-                background-color: inherit !important;
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
-            
-            /* Ensure form elements maintain background across page breaks */
-            form, fieldset, input, textarea, select {
-                background-color: inherit !important;
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
             }
         `;
     }

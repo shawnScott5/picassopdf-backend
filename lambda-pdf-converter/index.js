@@ -85,25 +85,10 @@ async function applyCSSPageBreaks(page) {
                     color-adjust: exact !important;
                 }
                 
-                /* Ensure background colors persist across page breaks */
-                body, html {
-                    background-color: inherit !important;
-                    -webkit-print-color-adjust: exact !important;
-                    color-adjust: exact !important;
-                }
-                
-                /* Fix for page break background color issues */
-                * {
-                    background-color: inherit !important;
-                    -webkit-print-color-adjust: exact !important;
-                    color-adjust: exact !important;
-                }
-                
                 /* Page setup */
                 @page {
                     size: A4;
                     margin: 10mm 0mm;
-                    background-color: inherit !important;
                 }
             }
             
@@ -240,73 +225,12 @@ async function applyCSSPageBreaks(page) {
                 page-break-before: auto !important;
                 break-before: auto !important;
             }
-            
-            /* Fix page break background color issues */
-            .pagedjs_page {
-                background-color: inherit !important;
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
-            
-            /* Ensure all page elements maintain background color */
-            .pagedjs_page_content {
-                background-color: inherit !important;
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
-            
-            /* Fix for elements that span across page breaks */
-            .pagedjs_page_content * {
-                background-color: inherit !important;
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
-            
-            /* Specific fix for table elements across page breaks */
-            table, tr, td, th {
-                background-color: inherit !important;
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
-            
-            /* Ensure form elements maintain background across page breaks */
-            form, fieldset, input, textarea, select {
-                background-color: inherit !important;
-                -webkit-print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
         `;
         
         await page.addStyleTag({ content: pageBreakCSS });
         
         // Apply content analysis and optimization
         await page.evaluate(() => {
-            // Fix background color inheritance for page breaks
-            function fixPageBreakBackgroundColors() {
-                // Get the document body background color
-                const bodyStyles = window.getComputedStyle(document.body);
-                const bodyBackgroundColor = bodyStyles.backgroundColor;
-                
-                // Apply background color to all elements to ensure inheritance
-                const allElements = document.querySelectorAll('*');
-                allElements.forEach(element => {
-                    const elementStyles = window.getComputedStyle(element);
-                    if (elementStyles.backgroundColor === 'rgba(0, 0, 0, 0)' || 
-                        elementStyles.backgroundColor === 'transparent' ||
-                        elementStyles.backgroundColor === 'initial') {
-                        element.style.backgroundColor = 'inherit';
-                        element.style.setProperty('-webkit-print-color-adjust', 'exact', 'important');
-                        element.style.setProperty('color-adjust', 'exact', 'important');
-                    }
-                });
-                
-                // Ensure body and html have proper background color
-                document.body.style.backgroundColor = bodyBackgroundColor;
-                document.documentElement.style.backgroundColor = bodyBackgroundColor;
-                
-                console.log('Applied background color fix for page breaks:', bodyBackgroundColor);
-            }
-            
             // Smart content grouping function
             function groupRelatedContent() {
                 const elements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, table, img, figure, blockquote, pre, ul, ol');
@@ -396,9 +320,6 @@ async function applyCSSPageBreaks(page) {
                     }
                 });
             }
-            
-            // Fix background colors first
-            fixPageBreakBackgroundColors();
             
             // Execute content grouping
             groupRelatedContent();
