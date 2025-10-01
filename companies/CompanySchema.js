@@ -84,7 +84,7 @@ const CompanySchema = new mongoose.Schema({
     subscription: {
         type: {
             type: String,
-            enum: ['FREE', 'PRO', 'SCALE', 'ENTERPRISE'],
+            enum: ['FREE', 'STARTER', 'GROWTH', 'SCALE', 'SMALL_BUSINESS', 'MEDIUM_BUSINESS', 'ENTERPRISE'],
             default: 'FREE'
         },
         status: {

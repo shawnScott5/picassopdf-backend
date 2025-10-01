@@ -516,6 +516,19 @@ exports.handler = async (event) => {
 
         const page = await browser.newPage();
 
+        // Set up proper viewport and user agent for better web page rendering
+        await page.setViewport({
+            width: 1920,
+            height: 1080,
+            deviceScaleFactor: 1,
+            hasTouch: false,
+            isLandscape: true,
+            isMobile: false
+        });
+
+        // Set a realistic user agent to avoid mobile/print CSS
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
         // Set up aggressive image blocking and error handling
         await page.setRequestInterception(true);
         page.on('request', (request) => {
@@ -584,6 +597,34 @@ exports.handler = async (event) => {
                 waitUntil: 'networkidle0',
                 timeout: 30000
             });
+            
+            // Wait for page to be fully rendered - only as long as needed
+            await page.evaluate(() => {
+                return new Promise((resolve) => {
+                    // If already complete, resolve immediately
+                    if (document.readyState === 'complete') {
+                        resolve();
+                        return;
+                    }
+                    
+                    // Otherwise wait for load event
+                    window.addEventListener('load', resolve, { once: true });
+                    
+                    // Fallback timeout to prevent infinite waiting
+                    setTimeout(resolve, 5000);
+                });
+            });
+            
+            // Wait for any remaining network activity to settle
+            try {
+                await page.waitForFunction(() => {
+                    return document.readyState === 'complete' && 
+                           performance.getEntriesByType('navigation')[0]?.loadEventEnd > 0;
+                }, { timeout: 3000 });
+            } catch (e) {
+                // If page doesn't fully load within 3 seconds, continue anyway
+                console.log('Page load timeout, proceeding with PDF generation');
+            }
         } else {
             // Combine HTML with CSS and JavaScript if provided
             let fullHtml = html;
@@ -676,18 +717,58 @@ exports.handler = async (event) => {
             });
         }
 
+        // Apply CSS to preserve original webpage styling
+        await page.addStyleTag({
+            content: `
+                /* Preserve original webpage styling */
+                @media print {
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                }
+                
+                /* Prevent print-specific CSS from overriding web styling */
+                @media print {
+                    body {
+                        background: white !important;
+                        color: black !important;
+                    }
+                }
+                
+                /* Ensure proper layout preservation */
+                body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+                
+                /* Preserve navigation and sidebar elements */
+                nav, .navigation, .sidebar, .menu {
+                    display: block !important;
+                }
+                
+                /* Preserve original colors and backgrounds */
+                * {
+                    -webkit-print-color-adjust: exact !important;
+                    color-adjust: exact !important;
+                }
+            `
+        });
+
         // Apply professional page breaks
         await applyPageBreaks(page);
 
-        // Generate PDF with user-provided options
+        // Generate PDF with user-provided options and enhanced web page preservation
         const pdfBuffer = await page.pdf({
             format: options.format || 'A4',
             printBackground: true,
+            preferCSSPageSize: false, // Use format size instead of CSS page size
             margin: options.margin || {
-                top: '20px',
-                right: '20px',
-                bottom: '20px',
-                left: '20px'
+                top: '10px',
+                right: '10px',
+                bottom: '10px',
+                left: '10px'
             },
             displayHeaderFooter: options.displayHeaderFooter || false,
             landscape: options.landscape || false,
@@ -697,6 +778,8 @@ exports.handler = async (event) => {
             headerTemplate: options.headerTemplate || '<div></div>',
             footerTemplate: options.footerTemplate || '<div></div>',
             scale: options.scale || 1.0,
+            omitBackground: false, // Preserve background colors and images
+            tagged: true, // Enable PDF accessibility features
             ...options // Include any additional PDF options
         });
 

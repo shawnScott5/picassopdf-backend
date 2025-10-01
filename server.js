@@ -29,6 +29,14 @@ import ApiKeysRoute from './api-keys/ApiKeysRoute.js';
 import OrganizationRoute from './organizations/OrganizationRoute.js';
 import conversionsController from './conversions/ConversionsController.js';
 import apiKeyAuth from './middlewares/apiKeyAuth.js';
+import { 
+    generalLimiter, 
+    pdfConversionLimiter, 
+    ipLimiter, 
+    rateLimitMonitor,
+    healthCheckLimiter 
+} from './middlewares/rateLimiter.js';
+import rateLimitMonitorService from './services/RateLimitMonitor.js';
 import { execSync } from 'child_process';
 
 const app = express();
@@ -43,6 +51,17 @@ app.use(helmet({
     contentSecurityPolicy: false, // Disable CSP for API endpoints
     crossOriginEmbedderPolicy: false
 }));
+
+// Rate limiting middleware - Apply early in the middleware stack
+app.use(rateLimitMonitor); // Monitor rate limit events
+app.use(ipLimiter); // IP-based rate limiting for additional protection
+
+// Track successful requests for monitoring
+app.use((req, res, next) => {
+    // Track successful requests
+    rateLimitMonitorService.logSuccessfulRequest(req);
+    next();
+});
 
 // Middleware with performance optimizations
 app.use(express.json({ 
@@ -80,7 +99,8 @@ app.use(bodyParser.json({
 
 // V1 API Routes - Direct routes to avoid Express router conflicts
 
-app.post('/v1/convert/pdf', apiKeyAuth, async (req, res, next) => {
+// Add the /v1/convert endpoint to match code snippets
+app.post('/v1/convert', pdfConversionLimiter, apiKeyAuth, async (req, res, next) => {
     const timeout = setTimeout(() => {
         if (!res.headersSent) {
             res.status(408).json({
@@ -117,7 +137,44 @@ app.post('/v1/convert/pdf', apiKeyAuth, async (req, res, next) => {
     }
 });
 
-app.get('/v1/status', async (req, res) => {
+app.post('/v1/convert/pdf', pdfConversionLimiter, apiKeyAuth, async (req, res, next) => {
+    const timeout = setTimeout(() => {
+        if (!res.headersSent) {
+            res.status(408).json({
+                success: false,
+                message: 'Request timeout - PDF generation took too long',
+                error: 'TIMEOUT'
+            });
+        }
+    }, 60000);
+
+    try {
+        await conversionsController.convertHTMLToPDFAPIPublic(req, res, next);
+        clearTimeout(timeout);
+    } catch (error) {
+        clearTimeout(timeout);
+        if (error.name === 'TimeoutError') {
+            if (!res.headersSent) {
+                return res.status(408).json({
+                    success: false,
+                    message: 'PDF generation timed out',
+                    error: 'TIMEOUT'
+                });
+            }
+        } else if (error.message && error.message.includes('memory')) {
+            if (!res.headersSent) {
+                return res.status(507).json({
+                    success: false,
+                    message: 'Insufficient memory to process request',
+                    error: 'MEMORY_ERROR'
+                });
+            }
+        }
+        next(error);
+    }
+});
+
+app.get('/v1/status', healthCheckLimiter, async (req, res) => {
     try {
         const memUsage = process.memoryUsage();
         const uptime = process.uptime();
@@ -145,6 +202,19 @@ app.get('/v1/status', async (req, res) => {
             },
             cluster: clusterStatus,
             cache: cacheStats,
+            rateLimiting: {
+                enabled: true,
+                tiers: {
+                    'FREE': '600 RPM (10 RPS)',
+                    'STARTER': '600 RPM (10 RPS)',
+                    'GROWTH': '600 RPM (10 RPS)',
+                    'SCALE': '600 RPM (10 RPS)',
+                    'SMALL_BUSINESS': '600 RPM (10 RPS)',
+                    'MEDIUM_BUSINESS': '600 RPM (10 RPS)',
+                    'ENTERPRISE': '600 RPM (10 RPS)'
+                },
+                ipLimit: '1000 RPM per IP (global protection)'
+            },
             version: '1.0.0'
         });
     } catch (error) {
@@ -155,6 +225,50 @@ app.get('/v1/status', async (req, res) => {
         });
     }
 });
+
+// Health check endpoint for load balancers
+app.get('/health', healthCheckLimiter, (req, res) => {
+    res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
+
+// Rate limiting monitoring endpoint (admin only)
+app.get('/v1/admin/rate-limits', healthCheckLimiter, (req, res) => {
+    try {
+        const stats = rateLimitMonitorService.getStats();
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            rateLimiting: {
+                enabled: true,
+                tiers: {
+                    'FREE': '600 RPM (10 RPS)',
+                    'STARTER': '600 RPM (10 RPS)',
+                    'GROWTH': '600 RPM (10 RPS)',
+                    'SCALE': '600 RPM (10 RPS)',
+                    'SMALL_BUSINESS': '600 RPM (10 RPS)',
+                    'MEDIUM_BUSINESS': '600 RPM (10 RPS)',
+                    'ENTERPRISE': '600 RPM (10 RPS)'
+                },
+                ipLimit: '1000 RPM per IP (global protection)',
+                healthCheck: '1000 RPM'
+            },
+            statistics: stats
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get rate limiting statistics',
+            error: error.message
+        });
+    }
+});
+
+// Apply general rate limiting to all API routes
+app.use('/api/', generalLimiter);
 
 app.use('/api/actions', ActionsRoute);
 app.use('/api/admin', AdminRoute);
@@ -189,11 +303,23 @@ const server = app.listen(PORT, () => {
     console.log(`🔧 Process ID: ${process.pid}`);
     console.log(`💾 Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
     
-           // Check service availability
-           console.log("🏗️ Architecture: Heroku + AWS Lambda");
-           console.log("🚀 Primary: AWS Lambda for PDF conversion");
-           console.log("🎭 Fallback: Playwright with new browser instance per request");
-           console.log("✅ Ready for PDF generation");
+    // Check service availability
+    console.log("🏗️ Architecture: Heroku + AWS Lambda");
+    console.log("🚀 Primary: AWS Lambda for PDF conversion");
+    console.log("🎭 Fallback: Playwright with new browser instance per request");
+    console.log("✅ Ready for PDF generation");
+    
+    // Rate limiting configuration
+    console.log("🛡️ Rate Limiting: ENABLED");
+    console.log("   🆓 FREE: 600 RPM (10 RPS)");
+    console.log("   🚀 STARTER: 600 RPM (10 RPS)");
+    console.log("   📈 GROWTH: 600 RPM (10 RPS)");
+    console.log("   ⚡ SCALE: 600 RPM (10 RPS)");
+    console.log("   💼 SMALL BUSINESS: 600 RPM (10 RPS)");
+    console.log("   🏢 MEDIUM BUSINESS: 600 RPM (10 RPS)");
+    console.log("   🏭 ENTERPRISE: 600 RPM (10 RPS)");
+    console.log("   🔒 IP Protection: 1000 RPM per IP (global)");
+    console.log("   🏥 Health Checks: 1000 RPM");
 });
 
 // Graceful shutdown handling

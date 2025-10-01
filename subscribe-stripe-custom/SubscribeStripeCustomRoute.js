@@ -236,7 +236,28 @@ SubscribeStripeCustomRoute.post('/webhook', async (req, res) => {
 // Helper function to handle successful checkout sessions
 async function handleCheckoutSessionCompleted(session) {
     try {
-        const { userId, credits, planType } = session.metadata;
+        const { userId, credits, planType, tier } = session.metadata;
+        
+        // Determine tier based on credits if not provided
+        let subscriptionTier = tier;
+        if (!subscriptionTier && credits) {
+            const creditsNum = parseInt(credits);
+            if (creditsNum <= 50) {
+                subscriptionTier = 'FREE';
+            } else if (creditsNum <= 500) {
+                subscriptionTier = 'STARTER';
+            } else if (creditsNum <= 5000) {
+                subscriptionTier = 'GROWTH';
+            } else if (creditsNum <= 50000) {
+                subscriptionTier = 'SCALE';
+            } else if (creditsNum <= 100000) {
+                subscriptionTier = 'SMALL_BUSINESS';
+            } else if (creditsNum <= 500000) {
+                subscriptionTier = 'MEDIUM_BUSINESS';
+            } else {
+                subscriptionTier = 'ENTERPRISE';
+            }
+        }
         
         // Get the full subscription details from Stripe
         let stripeSubscription = null;
@@ -259,7 +280,7 @@ async function handleCheckoutSessionCompleted(session) {
                         email: customerEmail,
                         password: tempPassword, // User will need to reset password
                         subscription: {
-                            type: 'CUSTOM',
+                            type: subscriptionTier || 'CUSTOM',
                             status: stripeSubscription?.status || 'active',
                             credits: parseInt(credits),
                             price: session.amount_total / 100,
@@ -271,9 +292,10 @@ async function handleCheckoutSessionCompleted(session) {
                             trialStart: stripeSubscription?.trial_start ? new Date(stripeSubscription.trial_start * 1000).toISOString() : null,
                             trialEnd: stripeSubscription?.trial_end ? new Date(stripeSubscription.trial_end * 1000).toISOString() : null,
                             metadata: {
-                                planType: planType,
+                                planType: subscriptionTier || 'CUSTOM',
                                 credits: credits,
-                                originalPrice: session.amount_total / 100
+                                originalPrice: session.amount_total / 100,
+                                tier: subscriptionTier
                             }
                         },
                         stripeSessionId: session.id,

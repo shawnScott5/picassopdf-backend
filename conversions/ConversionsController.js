@@ -565,14 +565,11 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             return html;
         }
         
-        // Remove excessive whitespace and normalize line breaks
+        // Minimal normalization - preserve original formatting and spacing
         return html
             .replace(/\r\n/g, '\n')           // Normalize Windows line endings
             .replace(/\r/g, '\n')             // Normalize Mac line endings
-            .replace(/\n\s*\n/g, '\n')        // Remove empty lines
-            .replace(/\s+/g, ' ')             // Collapse multiple spaces
-            .replace(/>\s+</g, '><')          // Remove spaces between tags
-            .trim();                          // Remove leading/trailing whitespace
+            .trim();                          // Remove leading/trailing whitespace only
     }
 
     /**
@@ -584,14 +581,13 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             return html;
         }
         
-        // Basic HTML sanitization
+        // Minimal sanitization - preserve original HTML structure
         let sanitized = html
-            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters
-            .replace(/&(?![a-zA-Z0-9#]+;)/g, '&amp;')          // Escape unescaped ampersands
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove only dangerous control characters
             .trim();
         
-        // Ensure proper DOCTYPE if missing
-        if (!sanitized.toLowerCase().includes('<!doctype')) {
+        // Only add DOCTYPE if completely missing (preserve user's intent)
+        if (!sanitized.toLowerCase().includes('<!doctype') && !sanitized.toLowerCase().includes('<html')) {
             sanitized = '<!DOCTYPE html>\n' + sanitized;
         }
         
@@ -1917,9 +1913,20 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             logRecord.generationTimeMs = processingTime;
             logRecord.creditUsed = pageCount; // Update with actual page count
             logRecord.storageRef = conversionRecord ? conversionRecord._id.toString() : null;
+            
+            console.log(`📝 Updating log record:`, {
+                requestId: logRecord.requestId,
+                companyId: logRecord.companyId,
+                userId: logRecord.userId,
+                creditUsed: logRecord.creditUsed,
+                status: logRecord.status,
+                timestamp: logRecord.timestamp
+            });
+            
             await logRecord.save();
             const logUpdateEndTime = Date.now();
             console.log(`📝 Log record update took: ${logUpdateEndTime - logUpdateStartTime}ms`);
+            console.log(`✅ Log record saved successfully with ${pageCount} credits`);
 
             console.log(`✅ Public API PDF conversion completed: ${fileName} (${fileSize} bytes, ${processingTime}ms)`);
 

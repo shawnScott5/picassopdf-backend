@@ -76,6 +76,85 @@ router.get('/', authenticate, async (req, res) => {
     }
 });
 
+// Get logs by date range
+router.get('/date-range', authenticate, async (req, res) => {
+    try {
+        const { startDate, endDate, page = 1, limit = 10 } = req.query;
+        const companyId = req.user?.companyId || req.companyId;
+        const userId = req.userId || req.user?.id;
+        
+        if (!companyId && !userId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Company ID or User ID is required to fetch logs by date range'
+            });
+        }
+        
+        const filters = {};
+        if (companyId) {
+            filters.companyId = companyId;
+        } else if (userId) {
+            filters.userId = userId;
+        }
+        
+        if (startDate && endDate) {
+            // Create date range that includes the entire end date
+            const startDateTime = new Date(startDate + 'T00:00:00.000Z');
+            const endDateTime = new Date(endDate + 'T23:59:59.999Z');
+            
+            filters.timestamp = {
+                $gte: startDateTime,
+                $lte: endDateTime
+            };
+            
+            console.log('📅 Date range filter:', {
+                startDate,
+                endDate,
+                startDateTime: startDateTime.toISOString(),
+                endDateTime: endDateTime.toISOString(),
+                filter: filters.timestamp
+            });
+        }
+        
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        const [logs, total] = await Promise.all([
+            LogsSchema.find(filters)
+                .sort({ timestamp: -1 })
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(),
+            LogsSchema.countDocuments(filters)
+        ]);
+        
+        const result = {
+            logs,
+            total,
+            page: parseInt(page),
+            limit: parseInt(limit),
+            totalPages: Math.ceil(total / parseInt(limit))
+        };
+        
+        res.json({
+            success: true,
+            message: 'Logs retrieved successfully',
+            data: result.logs,
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages
+        });
+        
+    } catch (error) {
+        console.error('Error fetching logs by date range:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch logs by date range',
+            error: error.message
+        });
+    }
+});
+
 // Get log by ID
 router.get('/:id', authenticate, async (req, res) => {
     try {
@@ -184,72 +263,6 @@ router.get('/stats/summary', authenticate, async (req, res) => {
     }
 });
 
-// Get logs by date range
-router.get('/date-range', authenticate, async (req, res) => {
-    try {
-        const { startDate, endDate, page = 1, limit = 10 } = req.query;
-        const companyId = req.user?.companyId || req.companyId;
-        const userId = req.userId || req.user?.id;
-        
-        if (!companyId && !userId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Company ID or User ID is required to fetch logs by date range'
-            });
-        }
-        
-        const filters = {};
-        if (companyId) {
-            filters.companyId = companyId;
-        } else if (userId) {
-            filters.userId = userId;
-        }
-        
-        if (startDate && endDate) {
-            filters.timestamp = {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
-            };
-        }
-        
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-        
-        const [logs, total] = await Promise.all([
-            LogsSchema.find(filters)
-                .sort({ timestamp: -1 })
-                .skip(skip)
-                .limit(parseInt(limit))
-                .lean(),
-            LogsSchema.countDocuments(filters)
-        ]);
-        
-        const result = {
-            logs,
-            total,
-            page: parseInt(page),
-            limit: parseInt(limit),
-            totalPages: Math.ceil(total / parseInt(limit))
-        };
-        
-        res.json({
-            success: true,
-            message: 'Logs retrieved successfully',
-            data: result.logs,
-            total: result.total,
-            page: result.page,
-            limit: result.limit,
-            totalPages: result.totalPages
-        });
-        
-    } catch (error) {
-        console.error('Error fetching logs by date range:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch logs by date range',
-            error: error.message
-        });
-    }
-});
 
 // Delete log by ID
 router.delete('/:id', authenticate, async (req, res) => {
