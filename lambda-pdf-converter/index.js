@@ -713,16 +713,107 @@ exports.handler = async (event) => {
         };
 
     } catch (error) {
+        console.error('❌ PDF conversion error:', error.message);
+        console.error('Error stack:', error.stack);
+        
+        // Categorize errors for better client-side handling
+        let errorCode = 'CONVERSION_FAILED';
+        let statusCode = 500;
+        let message = 'PDF conversion failed';
+        let suggestion = 'Please try again or contact support if the issue persists';
+        
+        const errorMsg = error.message || '';
+        
+        // Timeout errors
+        if (error.name === 'TimeoutError' || errorMsg.includes('timeout')) {
+            errorCode = 'TIMEOUT';
+            statusCode = 408;
+            message = 'PDF generation timed out';
+            suggestion = 'Try simplifying your content or reducing the number of images';
+        }
+        // Navigation/URL errors
+        else if (errorMsg.includes('Navigation timeout') || errorMsg.includes('navigationtimeout')) {
+            errorCode = 'URL_TIMEOUT';
+            statusCode = 504;
+            message = 'URL navigation timed out - the external website is too slow or unresponsive';
+            suggestion = 'Check that the URL is accessible and responds quickly';
+        }
+        else if (errorMsg.includes('net::ERR_NAME_NOT_RESOLVED') || errorMsg.includes('NAME_NOT_RESOLVED')) {
+            errorCode = 'DNS_ERROR';
+            statusCode = 400;
+            message = 'URL could not be resolved - domain name does not exist';
+            suggestion = 'Verify that the URL is correct and the domain exists';
+        }
+        else if (errorMsg.includes('ERR_CONNECTION_REFUSED') || errorMsg.includes('CONNECTION_REFUSED')) {
+            errorCode = 'CONNECTION_REFUSED';
+            statusCode = 400;
+            message = 'Connection to the URL was refused';
+            suggestion = 'Ensure the website is online and accessible';
+        }
+        else if (errorMsg.includes('ERR_SSL') || errorMsg.includes('SSL') || errorMsg.includes('certificate')) {
+            errorCode = 'SSL_ERROR';
+            statusCode = 400;
+            message = 'SSL certificate error for the provided URL';
+            suggestion = 'Check that the website has a valid SSL certificate';
+        }
+        else if (errorMsg.includes('ERR_TUNNEL_CONNECTION_FAILED')) {
+            errorCode = 'CONNECTION_FAILED';
+            statusCode = 502;
+            message = 'Failed to establish connection to the URL';
+            suggestion = 'The website may be behind a firewall or blocking our requests';
+        }
+        // Memory errors
+        else if (errorMsg.includes('heap out of memory') || errorMsg.includes('memory')) {
+            errorCode = 'OUT_OF_MEMORY';
+            statusCode = 507;
+            message = 'Content too complex - ran out of memory during rendering';
+            suggestion = 'Reduce the size or complexity of your HTML content';
+        }
+        // Browser/Protocol errors
+        else if (errorMsg.includes('Protocol error') || errorMsg.includes('Target closed')) {
+            errorCode = 'BROWSER_CRASH';
+            statusCode = 500;
+            message = 'Browser crashed during PDF rendering';
+            suggestion = 'Try simplifying your HTML or removing complex JavaScript';
+        }
+        // Session/Page errors
+        else if (errorMsg.includes('Session closed') || errorMsg.includes('Execution context was destroyed')) {
+            errorCode = 'SESSION_ERROR';
+            statusCode = 500;
+            message = 'Browser session was terminated unexpectedly';
+            suggestion = 'This is usually temporary - please try again';
+        }
+        // Invalid content errors
+        else if (errorMsg.includes('Invalid') || errorMsg.includes('Parse error')) {
+            errorCode = 'INVALID_CONTENT';
+            statusCode = 400;
+            message = 'Invalid HTML or content provided';
+            suggestion = 'Validate your HTML syntax and try again';
+        }
+        
         return {
-            statusCode: 500,
+            statusCode: statusCode,
             headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS'
             },
             body: JSON.stringify({
                 success: false,
-                message: 'PDF conversion failed',
-                error: error.message
+                error: {
+                    code: errorCode,
+                    message: message,
+                    suggestion: suggestion,
+                    timestamp: new Date().toISOString()
+                },
+                // Include original error message only in development
+                ...(process.env.NODE_ENV === 'development' && { 
+                    debug: {
+                        originalError: error.message,
+                        errorType: error.name
+                    }
+                })
             })
         };
 

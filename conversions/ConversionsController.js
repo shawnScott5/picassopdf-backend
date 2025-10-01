@@ -16,6 +16,8 @@ import * as cheerio from 'cheerio';
 import crypto from 'crypto';
 import os from 'os';
 import QueueService from '../services/QueueService.js';
+import { validateConversionRequest } from '../utils/validationUtils.js';
+import { APIError, ERROR_CODES } from '../utils/errorResponse.js';
 
 dotenv.config();
 
@@ -1636,6 +1638,35 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             console.log('CSS provided:', !!css);
             console.log('JavaScript provided:', !!javascript);
             console.log('URL provided:', !!url);
+            
+            // ⚡ FAST VALIDATION - Run all security/validation checks BEFORE heavy processing
+            // This is O(n) with small constants - adds ~1-5ms for typical requests
+            console.log('🔒 Running enterprise validation checks...');
+            const validationStartTime = Date.now();
+            
+            const validation = validateConversionRequest({
+                html,
+                css,
+                javascript,
+                url,
+                options
+            });
+            
+            const validationTime = Date.now() - validationStartTime;
+            console.log(`✅ Validation completed in ${validationTime}ms`);
+            
+            // If validation fails, return error immediately (fail fast)
+            if (!validation.valid) {
+                console.log('❌ Validation failed:', validation.error);
+                return APIError.respond(
+                    res,
+                    validation.statusCode || 400,
+                    validation.error,
+                    validation.message,
+                    validation.details || {}
+                );
+            }
+            
             // Set default values for specific options
             const saveToVault = options.save_to_vault || false;
             const layoutRepair = ai_options.layout_repair || false;
@@ -1648,23 +1679,9 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
             console.log('API Key Company ID:', req.apiKey.companyId);
             console.log('=== END PUBLIC API REQUEST DEBUG ===');
             
-            // Validation: exactly one of 'html' OR 'url' must be provided
+            // Validation already done above - these are just for flow control
             const hasHtml = !!html;
             const hasUrl = !!url;
-            
-            if (!hasHtml && !hasUrl) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Either "html" or "url" field is required'
-                });
-            }
-            
-            if (hasHtml && hasUrl) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Provide either "html" OR "url", not both'
-                });
-            }
 
             // Get user and company info from API key
             const companyId = req.apiKey.companyId;
@@ -1940,11 +1957,21 @@ IMPORTANT: If changes are needed, respond with ONLY the corrected HTML code. Do 
                 }
             }
 
-            res.status(500).json({
-                success: false,
-                message: 'PDF conversion failed',
-                error: error.message
-            });
+            // Use enhanced error information if available
+            const errorCode = error.code || ERROR_CODES.CONVERSION_FAILED;
+            const statusCode = error.statusCode || 500;
+            const suggestion = error.suggestion;
+            
+            return APIError.respond(
+                res,
+                statusCode,
+                errorCode,
+                error.message || 'PDF conversion failed',
+                {
+                    ...(suggestion && { suggestion }),
+                    timestamp: new Date().toISOString()
+                }
+            );
         }
     }
 

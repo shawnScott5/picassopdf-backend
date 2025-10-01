@@ -116,23 +116,36 @@ ConversionsRoute.post('/convert/pdf', apiKeyAuth, async (req, res, next) => {
     } catch (error) {
         clearTimeout(timeout);
         
-        // Enhanced error handling
-        if (error.name === 'TimeoutError') {
-            if (!res.headersSent) {
-                return res.status(408).json({
-                    success: false,
-                    message: 'PDF generation timed out',
-                    error: 'TIMEOUT'
-                });
+        // Enhanced error handling with detailed categorization
+        if (!res.headersSent) {
+            // Determine error code and status
+            let errorCode = error.code || 'CONVERSION_FAILED';
+            let statusCode = error.statusCode || 500;
+            let message = error.message || 'PDF generation failed';
+            let suggestion = error.suggestion;
+            
+            // Special handling for specific error types
+            if (error.name === 'TimeoutError' || error.message?.includes('timeout')) {
+                errorCode = 'TIMEOUT';
+                statusCode = 408;
+                message = 'PDF generation timed out';
+                suggestion = 'Try simplifying your content or reducing complexity';
+            } else if (error.message?.includes('memory')) {
+                errorCode = 'OUT_OF_MEMORY';
+                statusCode = 507;
+                message = 'Insufficient memory to process request';
+                suggestion = 'Reduce the size or complexity of your HTML content';
             }
-        } else if (error.message && error.message.includes('memory')) {
-            if (!res.headersSent) {
-                return res.status(507).json({
-                    success: false,
-                    message: 'Insufficient memory to process request',
-                    error: 'MEMORY_ERROR'
-                });
-            }
+            
+            return res.status(statusCode).json({
+                success: false,
+                error: {
+                    code: errorCode,
+                    message: message,
+                    ...(suggestion && { suggestion }),
+                    timestamp: new Date().toISOString()
+                }
+            });
         }
         
         next(error);

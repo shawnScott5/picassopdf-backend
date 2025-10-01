@@ -78,13 +78,38 @@ class LambdaService {
                 console.log(`✅ Lambda PDF conversion successful: ${pdfBuffer.length} bytes`);
                 return pdfBuffer;
             } else {
+                // Parse enhanced error response from Lambda
                 const errorBody = JSON.parse(response.body);
-                throw new Error(`PDF conversion failed: ${errorBody.message}`);
+                
+                // Create detailed error with code and suggestion
+                const error = new Error(errorBody.error?.message || errorBody.message || 'PDF conversion failed');
+                error.code = errorBody.error?.code || 'CONVERSION_FAILED';
+                error.statusCode = response.statusCode;
+                error.suggestion = errorBody.error?.suggestion;
+                error.lambdaError = true;
+                
+                console.error('❌ Lambda returned error:', {
+                    code: error.code,
+                    message: error.message,
+                    statusCode: error.statusCode
+                });
+                
+                throw error;
             }
 
         } catch (error) {
             console.error('❌ Lambda PDF conversion failed:', error);
-            throw error;
+            
+            // If it's already a Lambda error, preserve it
+            if (error.lambdaError) {
+                throw error;
+            }
+            
+            // Otherwise, wrap it with context
+            const wrappedError = new Error(error.message);
+            wrappedError.code = 'LAMBDA_INVOCATION_FAILED';
+            wrappedError.originalError = error.message;
+            throw wrappedError;
         }
     }
 
