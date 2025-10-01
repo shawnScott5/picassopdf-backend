@@ -148,8 +148,10 @@ const ERROR_CODES = {
     DNS_ERROR: 'DNS_ERROR'
 };
 
-module.exports = {
+export {
     APIError,
     ERROR_CODES
 };
+
+export default APIError;
 

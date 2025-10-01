@@ -442,7 +442,7 @@ function validateConversionRequest(data) {
     };
 }
 
-module.exports = {
+export {
     validateConversionRequest,
     validateContentSize,
     validateUrl,
@@ -451,4 +451,6 @@ module.exports = {
     estimatePDFComplexity,
     SIZE_LIMITS
 };
+
+export default validateConversionRequest;
 
