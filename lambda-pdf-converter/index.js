@@ -88,7 +88,7 @@ async function applyCSSPageBreaks(page) {
                 /* Page setup */
                 @page {
                     size: A4;
-                    margin: 10mm 0mm;
+                    margin: 0mm;
                 }
             }
             
@@ -765,10 +765,10 @@ exports.handler = async (event) => {
             printBackground: true,
             preferCSSPageSize: false, // Use format size instead of CSS page size
             margin: options.margin || {
-                top: '10px',
-                right: '10px',
-                bottom: '10px',
-                left: '10px'
+                top: '0px',
+                right: '0px',
+                bottom: '0px',
+                left: '0px'
             },
             displayHeaderFooter: options.displayHeaderFooter || false,
             landscape: options.landscape || false,
