@@ -11,9 +11,28 @@ async function applyPageBreaks(page) {
     try {
         console.log('Applying professional page breaks...');
         
-        // Inject pagedjs CSS and JavaScript
+        // Inject pagedjs CSS and JavaScript with margin override
         await page.addStyleTag({
             url: 'https://unpkg.com/pagedjs@0.4.0/dist/paged.polyfill.css'
+        });
+        
+        // Override pagedjs margins to remove extra whitespace
+        await page.addStyleTag({
+            content: `
+                @page {
+                    margin: 0mm !important;
+                }
+                
+                .pagedjs_pages {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+                
+                .pagedjs_page {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+            `
         });
         
         await page.addScriptTag({
@@ -518,11 +537,11 @@ exports.handler = async (event) => {
 
         // Set up proper viewport and user agent for better web page rendering
         await page.setViewport({
-            width: 1920,
-            height: 1080,
+            width: 1200,
+            height: 800,
             deviceScaleFactor: 1,
             hasTouch: false,
-            isLandscape: true,
+            isLandscape: false,
             isMobile: false
         });
 
@@ -741,11 +760,40 @@ exports.handler = async (event) => {
                 body {
                     margin: 0 !important;
                     padding: 0 !important;
+                    width: 100% !important;
+                    max-width: none !important;
+                }
+                
+                /* Fix common layout issues for URL conversions */
+                .container, .wrapper, .main, .content {
+                    width: 100% !important;
+                    max-width: none !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
                 }
                 
                 /* Preserve navigation and sidebar elements */
                 nav, .navigation, .sidebar, .menu {
                     display: block !important;
+                }
+                
+                /* Fix flexbox and grid layouts for PDF */
+                .flex, .d-flex, .grid, .d-grid {
+                    display: block !important;
+                }
+                
+                .row, .col, [class*="col-"] {
+                    width: 100% !important;
+                    display: block !important;
+                    float: none !important;
+                }
+                
+                /* Fix common responsive issues */
+                @media (max-width: 768px) {
+                    * {
+                        width: auto !important;
+                        max-width: 100% !important;
+                    }
                 }
                 
                 /* Preserve original colors and backgrounds */
@@ -756,8 +804,13 @@ exports.handler = async (event) => {
             `
         });
 
-        // Apply professional page breaks
-        await applyPageBreaks(page);
+        // Apply professional page breaks - skip pagedjs for URL conversions to avoid layout conflicts
+        if (isUrl) {
+            console.log('Skipping pagedjs for URL conversion, using CSS-only page breaks');
+            await applyCSSPageBreaks(page);
+        } else {
+            await applyPageBreaks(page);
+        }
 
         // Generate PDF with user-provided options and enhanced web page preservation
         const pdfBuffer = await page.pdf({
