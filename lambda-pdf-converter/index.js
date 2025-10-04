@@ -87,6 +87,238 @@ async function applyPageBreaks(page) {
 }
 
 /**
+ * URL-optimized page break handling with pagedjs
+ */
+async function applyURLPageBreaks(page) {
+    try {
+        console.log('Applying URL-optimized pagedjs processing...');
+        
+        // First, inject CSS to prepare the page for pagedjs
+        await page.addStyleTag({
+            content: `
+                /* URL-specific CSS preparation for pagedjs */
+                
+                /* Reset common layout issues */
+                body, html {
+                    width: 100% !important;
+                    max-width: none !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+                
+                /* Fix common responsive layouts */
+                .container, .wrapper, .main, .content, .page {
+                    width: 100% !important;
+                    max-width: none !important;
+                    margin: 0 !important;
+                    padding: 10px !important;
+                    box-sizing: border-box !important;
+                }
+                
+                /* Fix flexbox and grid for print */
+                .flex, .d-flex {
+                    display: block !important;
+                }
+                
+                .grid, .d-grid {
+                    display: block !important;
+                }
+                
+                .row {
+                    display: block !important;
+                    width: 100% !important;
+                }
+                
+                .col, [class*="col-"] {
+                    width: 100% !important;
+                    display: block !important;
+                    float: none !important;
+                    margin: 0 !important;
+                    padding: 5px !important;
+                }
+                
+                /* Fix common UI framework issues */
+                .navbar, .nav, .header, .footer {
+                    position: static !important;
+                    width: 100% !important;
+                }
+                
+                /* Ensure content flows properly */
+                .sidebar {
+                    display: block !important;
+                    width: 100% !important;
+                    float: none !important;
+                }
+                
+                /* Fix sticky elements */
+                .sticky, .fixed, [style*="position: fixed"], [style*="position: sticky"] {
+                    position: static !important;
+                }
+                
+                /* Ensure images don't break layout */
+                img {
+                    max-width: 100% !important;
+                    height: auto !important;
+                    display: block !important;
+                }
+                
+                /* Fix text overflow */
+                p, div, span, article, section {
+                    word-wrap: break-word !important;
+                    overflow-wrap: break-word !important;
+                }
+                
+                /* Remove problematic animations */
+                *, *::before, *::after {
+                    animation: none !important;
+                    transition: none !important;
+                }
+                
+                /* Hide elements that don't print well */
+                .no-print, .print-hidden, .advertisement, .ad, .banner {
+                    display: none !important;
+                }
+            `
+        });
+        
+        // Wait for CSS to apply
+        await page.waitForTimeout(1000);
+        
+        // Now inject pagedjs with URL-specific overrides
+        await page.addStyleTag({
+            url: 'https://unpkg.com/pagedjs@0.4.0/dist/paged.polyfill.css'
+        });
+        
+        // Override pagedjs defaults for URL content
+        await page.addStyleTag({
+            content: `
+                /* URL-specific pagedjs overrides */
+                @page {
+                    margin: 0mm !important;
+                    size: A4 !important;
+                }
+                
+                .pagedjs_pages {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-shadow: none !important;
+                }
+                
+                .pagedjs_page {
+                    margin: 0 !important;
+                    padding: 10mm !important;
+                    box-shadow: none !important;
+                    border: none !important;
+                }
+                
+                .pagedjs_page_content {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+                
+                /* Ensure content fits properly */
+                .pagedjs_page .container,
+                .pagedjs_page .wrapper,
+                .pagedjs_page .main {
+                    width: 100% !important;
+                    max-width: none !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+                
+                /* Fix text flow */
+                .pagedjs_page p,
+                .pagedjs_page div,
+                .pagedjs_page article,
+                .pagedjs_page section {
+                    break-inside: avoid-page !important;
+                    orphans: 2 !important;
+                    widows: 2 !important;
+                }
+                
+                /* Better heading breaks */
+                .pagedjs_page h1,
+                .pagedjs_page h2,
+                .pagedjs_page h3 {
+                    break-after: avoid !important;
+                    break-inside: avoid !important;
+                    page-break-after: avoid !important;
+                    page-break-inside: avoid !important;
+                }
+            `
+        });
+        
+        await page.addScriptTag({
+            url: 'https://unpkg.com/pagedjs@0.4.0/dist/paged.polyfill.js'
+        });
+        
+        // Wait for pagedjs to load
+        await page.waitForFunction(() => window.Paged, { timeout: 10000 });
+        
+        // Apply URL-specific pagedjs processing
+        const result = await page.evaluate(() => {
+            try {
+                console.log('Initializing pagedjs for URL content...');
+                
+                // Initialize pagedjs with URL-specific options
+                const paged = new window.Paged.Previewer({
+                    before: () => {
+                        console.log('Starting URL page processing...');
+                        // Remove any remaining problematic elements
+                        const problematicElements = document.querySelectorAll('.no-print, .print-hidden, .advertisement, .ad');
+                        problematicElements.forEach(el => el.remove());
+                        
+                        // Ensure proper text flow
+                        const textElements = document.querySelectorAll('p, div, span');
+                        textElements.forEach(el => {
+                            el.style.wordWrap = 'break-word';
+                            el.style.overflowWrap = 'break-word';
+                        });
+                    },
+                    after: () => {
+                        console.log('URL page processing completed');
+                    }
+                });
+                
+                // Process the document with enhanced error handling
+                return paged.preview(document.body).then((flow) => {
+                    console.log('Pagedjs processed', flow.total, 'pages for URL');
+                    return {
+                        totalPages: flow.total,
+                        success: true
+                    };
+                }).catch((error) => {
+                    console.error('Pagedjs URL processing error:', error);
+                    return {
+                        totalPages: 1,
+                        success: false,
+                        error: error.message
+                    };
+                });
+            } catch (error) {
+                console.error('Pagedjs URL initialization error:', error);
+                return {
+                    totalPages: 1,
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+        
+        if (result.success) {
+            console.log('URL-optimized pagedjs processing completed successfully');
+        } else {
+            console.warn('Pagedjs failed for URL, falling back to CSS page breaks:', result.error);
+            await applyCSSPageBreaks(page);
+        }
+        
+    } catch (error) {
+        console.warn('URL pagedjs processing failed, using CSS fallback:', error.message);
+        await applyCSSPageBreaks(page);
+    }
+}
+
+/**
  * Fallback CSS-based page break handling
  */
 async function applyCSSPageBreaks(page) {
@@ -804,10 +1036,10 @@ exports.handler = async (event) => {
             `
         });
 
-        // Apply professional page breaks - skip pagedjs for URL conversions to avoid layout conflicts
+        // Apply professional page breaks with URL-specific handling
         if (isUrl) {
-            console.log('Skipping pagedjs for URL conversion, using CSS-only page breaks');
-            await applyCSSPageBreaks(page);
+            console.log('Applying URL-optimized pagedjs processing');
+            await applyURLPageBreaks(page);
         } else {
             await applyPageBreaks(page);
         }
