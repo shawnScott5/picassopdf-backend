@@ -1036,10 +1036,10 @@ exports.handler = async (event) => {
             `
         });
 
-        // Apply professional page breaks with URL-specific handling
+        // Apply professional page breaks - use CSS-only for URLs to avoid layout conflicts
         if (isUrl) {
-            console.log('Applying URL-optimized pagedjs processing');
-            await applyURLPageBreaks(page);
+            console.log('Using CSS-only page breaks for URL conversion to avoid layout conflicts');
+            await applyCSSPageBreaks(page);
         } else {
             await applyPageBreaks(page);
         }
