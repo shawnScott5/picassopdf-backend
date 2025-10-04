@@ -968,63 +968,15 @@ exports.handler = async (event) => {
             });
         }
 
-        // Apply CSS to preserve original webpage styling
+        // Apply minimal CSS to preserve original webpage styling
         await page.addStyleTag({
             content: `
-                /* Preserve original webpage styling */
+                /* Minimal CSS to preserve original webpage styling */
                 @media print {
                     * {
                         -webkit-print-color-adjust: exact !important;
                         color-adjust: exact !important;
                         print-color-adjust: exact !important;
-                    }
-                }
-                
-                /* Prevent print-specific CSS from overriding web styling */
-                @media print {
-                    body {
-                        background: white !important;
-                        color: black !important;
-                    }
-                }
-                
-                /* Ensure proper layout preservation */
-                body {
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    width: 100% !important;
-                    max-width: none !important;
-                }
-                
-                /* Fix common layout issues for URL conversions */
-                .container, .wrapper, .main, .content {
-                    width: 100% !important;
-                    max-width: none !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                }
-                
-                /* Preserve navigation and sidebar elements */
-                nav, .navigation, .sidebar, .menu {
-                    display: block !important;
-                }
-                
-                /* Fix flexbox and grid layouts for PDF */
-                .flex, .d-flex, .grid, .d-grid {
-                    display: block !important;
-                }
-                
-                .row, .col, [class*="col-"] {
-                    width: 100% !important;
-                    display: block !important;
-                    float: none !important;
-                }
-                
-                /* Fix common responsive issues */
-                @media (max-width: 768px) {
-                    * {
-                        width: auto !important;
-                        max-width: 100% !important;
                     }
                 }
                 
