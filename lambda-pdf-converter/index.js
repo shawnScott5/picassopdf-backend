@@ -768,44 +768,68 @@ exports.handler = async (event) => {
         const page = await browser.newPage();
 
         // Set up proper viewport and user agent for better web page rendering
-        await page.setViewport({
-            width: 1200,
-            height: 800,
-            deviceScaleFactor: 1,
-            hasTouch: false,
-            isLandscape: false,
-            isMobile: false
-        });
+        if (isUrl) {
+            // Use full desktop viewport for URL conversions
+            await page.setViewport({
+                width: 1920,
+                height: 1080,
+                deviceScaleFactor: 1,
+                hasTouch: false,
+                isLandscape: false,
+                isMobile: false
+            });
+        } else {
+            await page.setViewport({
+                width: 1200,
+                height: 800,
+                deviceScaleFactor: 1,
+                hasTouch: false,
+                isLandscape: false,
+                isMobile: false
+            });
+        }
 
         // Set a realistic user agent to avoid mobile/print CSS
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-        // Set up aggressive image blocking and error handling
+        // Set up request interception - less aggressive for URL conversions
         await page.setRequestInterception(true);
         page.on('request', (request) => {
             const resourceType = request.resourceType();
             const url = request.url();
             
-            // Block ALL images from known problematic services immediately
-            if (resourceType === 'image') {
+            if (isUrl) {
+                // For URL conversions, only block known problematic services
                 const invalidServices = ['via.placeholder.com', 'placeholder.com', 'dummyimage.com'];
                 const hasInvalidService = invalidServices.some(service => url.includes(service));
                 
                 if (hasInvalidService) {
-                    console.log(`🚫 BLOCKING problematic image: ${url}`);
+                    console.log(`🚫 BLOCKING problematic service: ${url}`);
                     request.abort('failed');
                     return;
                 }
-            }
-            
-            // Also block any request that looks like a problematic image service
-            const invalidServices = ['via.placeholder.com', 'placeholder.com', 'dummyimage.com'];
-            const hasInvalidService = invalidServices.some(service => url.includes(service));
-            
-            if (hasInvalidService) {
-                console.log(`🚫 BLOCKING problematic request: ${url}`);
-                request.abort('failed');
-                return;
+            } else {
+                // For HTML conversions, use more aggressive blocking
+                if (resourceType === 'image') {
+                    const invalidServices = ['via.placeholder.com', 'placeholder.com', 'dummyimage.com'];
+                    const hasInvalidService = invalidServices.some(service => url.includes(service));
+                    
+                    if (hasInvalidService) {
+                        console.log(`🚫 BLOCKING problematic image: ${url}`);
+                        request.abort('failed');
+                        return;
+                    }
+                }
+                
+                // Also block any request that looks like a problematic image service
+                const invalidServices = ['via.placeholder.com', 'placeholder.com', 'dummyimage.com'];
+                const hasInvalidService = invalidServices.some(service => url.includes(service));
+                
+                if (hasInvalidService) {
+                    console.log(`🚫 BLOCKING problematic request: ${url}`);
+                    request.abort('failed');
+                    return;
+                }
             }
             
             request.continue();
@@ -968,25 +992,72 @@ exports.handler = async (event) => {
             });
         }
 
-        // Apply minimal CSS to preserve original webpage styling
-        await page.addStyleTag({
-            content: `
-                /* Minimal CSS to preserve original webpage styling */
-                @media print {
+        // Apply CSS to preserve original webpage styling
+        if (isUrl) {
+            // URL-specific CSS to ensure navigation and images are visible
+            await page.addStyleTag({
+                content: `
+                    /* URL-specific CSS to preserve webpage layout */
+                    @media print {
+                        * {
+                            -webkit-print-color-adjust: exact !important;
+                            color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                        }
+                    }
+                    
+                    /* Ensure navigation and headers are visible */
+                    nav, .nav, .navbar, .navigation, .header, .top-nav, .main-nav,
+                    .site-header, .page-header, .header-container, .nav-container {
+                        display: block !important;
+                        visibility: visible !important;
+                        opacity: 1 !important;
+                        position: static !important;
+                    }
+                    
+                    /* Ensure images load and are visible */
+                    img {
+                        display: block !important;
+                        visibility: visible !important;
+                        opacity: 1 !important;
+                        max-width: 100% !important;
+                        height: auto !important;
+                    }
+                    
+                    /* Fix common layout issues */
+                    .container, .wrapper, .main, .content, .page {
+                        width: 100% !important;
+                        max-width: none !important;
+                    }
+                    
+                    /* Preserve original colors and backgrounds */
                     * {
                         -webkit-print-color-adjust: exact !important;
                         color-adjust: exact !important;
-                        print-color-adjust: exact !important;
                     }
-                }
-                
-                /* Preserve original colors and backgrounds */
-                * {
-                    -webkit-print-color-adjust: exact !important;
-                    color-adjust: exact !important;
-                }
-            `
-        });
+                `
+            });
+        } else {
+            // Minimal CSS for HTML conversions
+            await page.addStyleTag({
+                content: `
+                    /* Minimal CSS to preserve original webpage styling */
+                    @media print {
+                        * {
+                            -webkit-print-color-adjust: exact !important;
+                            color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                        }
+                    }
+                    
+                    /* Preserve original colors and backgrounds */
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        color-adjust: exact !important;
+                    }
+                `
+            });
+        }
 
         // Apply professional page breaks only for HTML conversions
         if (isUrl) {
