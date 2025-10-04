@@ -1036,10 +1036,9 @@ exports.handler = async (event) => {
             `
         });
 
-        // Apply professional page breaks - use CSS-only for URLs to avoid layout conflicts
+        // Apply professional page breaks only for HTML conversions
         if (isUrl) {
-            console.log('Using CSS-only page breaks for URL conversion to avoid layout conflicts');
-            await applyCSSPageBreaks(page);
+            console.log('Skipping page break processing for URL conversion to preserve original layout');
         } else {
             await applyPageBreaks(page);
         }
