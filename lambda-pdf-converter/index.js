@@ -868,38 +868,72 @@ exports.handler = async (event) => {
         });
 
         if (isUrl) {
+            console.log('🌐 Navigating to URL:', url);
             await page.goto(url, {
-                waitUntil: 'networkidle0',
-                timeout: 30000
+                waitUntil: 'domcontentloaded',
+                timeout: 45000
             });
             
-            // Wait for page to be fully rendered - only as long as needed
+            // Dynamic loading detection - wait until page is fully loaded
+            console.log('⏳ Waiting for dynamic content to load...');
             await page.evaluate(() => {
                 return new Promise((resolve) => {
-                    // If already complete, resolve immediately
-                    if (document.readyState === 'complete') {
-                        resolve();
-                        return;
-                    }
+                    let attempts = 0;
+                    const maxAttempts = 40; // 40 attempts * 250ms = 10 seconds max
                     
-                    // Otherwise wait for load event
-                    window.addEventListener('load', resolve, { once: true });
+                    const checkPageLoaded = () => {
+                        attempts++;
+                        
+                        // Check if page is fully loaded
+                        const isComplete = document.readyState === 'complete';
+                        const hasImagesLoaded = Array.from(document.images).every(img => 
+                            img.complete || img.naturalWidth > 0 || img.naturalHeight > 0
+                        );
+                        const hasNetworkSettled = !performance.getEntriesByType('navigation').some(entry => 
+                            entry.loadEventEnd === 0
+                        );
+                        
+                        // Check for lazy-loaded content
+                        const lazyImages = document.querySelectorAll('img[loading="lazy"], img[data-src]');
+                        const lazyImagesLoaded = Array.from(lazyImages).every(img => 
+                            img.complete || img.naturalWidth > 0
+                        );
+                        
+                        // Force lazy images to load
+                        lazyImages.forEach(img => {
+                            if (img.dataset.src && !img.src) {
+                                img.src = img.dataset.src;
+                            }
+                            if (img.dataset.srcset && !img.srcset) {
+                                img.srcset = img.dataset.srcset;
+                            }
+                            img.loading = 'eager';
+                        });
+                        
+                        // Check if all conditions are met
+                        if (isComplete && hasImagesLoaded && hasNetworkSettled && lazyImagesLoaded) {
+                            console.log('✅ Page fully loaded');
+                            resolve();
+                            return;
+                        }
+                        
+                        // Timeout after max attempts
+                        if (attempts >= maxAttempts) {
+                            console.log('⏰ Loading timeout reached, proceeding with current state');
+                            resolve();
+                            return;
+                        }
+                        
+                        // Check again in 250ms
+                        setTimeout(checkPageLoaded, 250);
+                    };
                     
-                    // Fallback timeout to prevent infinite waiting
-                    setTimeout(resolve, 5000);
+                    // Start checking immediately
+                    checkPageLoaded();
                 });
             });
             
-            // Wait for any remaining network activity to settle
-            try {
-                await page.waitForFunction(() => {
-                    return document.readyState === 'complete' && 
-                           performance.getEntriesByType('navigation')[0]?.loadEventEnd > 0;
-                }, { timeout: 3000 });
-            } catch (e) {
-                // If page doesn't fully load within 3 seconds, continue anyway
-                console.log('Page load timeout, proceeding with PDF generation');
-            }
+            console.log('✅ Dynamic loading detection completed');
         } else {
             // Combine HTML with CSS and JavaScript if provided
             let fullHtml = html;
@@ -1059,12 +1093,9 @@ exports.handler = async (event) => {
             });
         }
 
-        // Apply professional page breaks only for HTML conversions
-        if (isUrl) {
-            console.log('Skipping page break processing for URL conversion to preserve original layout');
-        } else {
-            await applyPageBreaks(page);
-        }
+        // Apply professional page breaks with PagedJS for both HTML and URL conversions
+        console.log('Applying professional page breaks with PagedJS...');
+        await applyPageBreaks(page);
 
         // Generate PDF with user-provided options and enhanced web page preservation
         const pdfBuffer = await page.pdf({
